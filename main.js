@@ -224,7 +224,7 @@ function setupAutoUpdater() {
     // Configure updater to only check current platform
     autoUpdater.setFeedURL({
         provider: 'github',
-        owner: 'ayman707-ux',
+        owner: 'ayman708-UX',
         repo: 'PlayTorrio',
         releaseType: 'release'
     });
@@ -292,7 +292,7 @@ function setupAutoUpdater() {
         });
 
         autoUpdater.on('update-available', (info) => {
-            const releasesUrl = 'https://github.com/ayman707-ux/PlayTorrio/releases/latest';
+            const releasesUrl = 'https://github.com/ayman708-UX/PlayTorrio/releases/latest';
             console.log('[Updater] Update available. New version:', info?.version || 'unknown', 'Current:', app.getVersion());
             // Guard: Only proceed if remote version is greater than current
             if (compareVersions(info?.version, app.getVersion()) <= 0) {
@@ -2529,6 +2529,103 @@ if (!gotLock) {
         }
     });
 
+    // ============================================================================
+    // XDMOVIES PLAY HANDLERS
+    // ============================================================================
+
+    // Play XDmovies link on PC (opens in MPV)
+    ipcMain.handle('play-xdmovies-mpv', (event, data) => {
+        const { streamUrl, movieTitle, startSeconds } = data || {};
+        console.log(`[XDmovies] Opening in MPV: ${movieTitle}`);
+        return openInMPV(mainWindow, streamUrl, movieTitle || 'xdmovies', startSeconds);
+    });
+
+    // Play XDmovies link on Mac (opens in IINA)
+    ipcMain.handle('play-xdmovies-iina', (event, data) => {
+        const { streamUrl, movieTitle, startSeconds } = data || {};
+        console.log(`[XDmovies] Opening in IINA: ${movieTitle}`);
+        return openInIINA(mainWindow, streamUrl, movieTitle || 'xdmovies', startSeconds);
+    });
+
+    // Play XDmovies link on Linux (opens in MPV)
+    ipcMain.handle('play-xdmovies-linux', (event, data) => {
+        const { streamUrl, movieTitle, startSeconds } = data || {};
+        console.log(`[XDmovies] Opening in MPV (Linux): ${movieTitle}`);
+        return openInMPV(mainWindow, streamUrl, movieTitle || 'xdmovies', startSeconds);
+    });
+
+    // Generic XDmovies play handler (selects player based on platform)
+    ipcMain.handle('play-xdmovies', (event, data) => {
+        const { streamUrl, movieTitle, startSeconds } = data || {};
+        console.log(`[XDmovies] Playing on platform: ${process.platform}`);
+        
+        if (!streamUrl) {
+            return { success: false, message: 'Stream URL is required' };
+        }
+
+        if (process.platform === 'darwin') {
+            // macOS: Use IINA
+            return openInIINA(mainWindow, streamUrl, movieTitle || 'xdmovies', startSeconds);
+        } else if (process.platform === 'linux') {
+            // Linux: Use openMPVDirect (same as 111477)
+            return new Promise(async (resolve) => {
+                try {
+                    const mpvPath = resolveMpvExe();
+                    if (!mpvPath) {
+                        resolve({ success: false, message: 'MPV not found' });
+                        return;
+                    }
+                    const args = [];
+                    const start = Number(startSeconds || 0);
+                    if (!isNaN(start) && start > 10) {
+                        args.push(`--start=${Math.floor(start)}`);
+                    }
+                    args.push(streamUrl);
+                    const mpvProcess = spawn(mpvPath, args, { stdio: 'ignore' });
+                    mpvProcess.on('close', () => {
+                        console.log('[XDmovies] MPV closed');
+                    });
+                    resolve({ success: true, message: 'MPV launched' });
+                } catch (error) {
+                    console.error('[XDmovies] Error:', error);
+                    resolve({ success: false, message: error.message });
+                }
+            });
+        } else {
+            // Windows: Use openMPVDirect (same as 111477) - this uses the system/global mpv
+            return new Promise(async (resolve) => {
+                try {
+                    const mpvPath = resolveMpvExe();
+                    if (!mpvPath) {
+                        // Fallback: try using system mpv or just launch with the URL directly
+                        try {
+                            shell.openExternal(streamUrl);
+                            resolve({ success: true, message: 'Opening in default player' });
+                            return;
+                        } catch (_) {
+                            resolve({ success: false, message: 'MPV not found and cannot open externally' });
+                            return;
+                        }
+                    }
+                    const args = [];
+                    const start = Number(startSeconds || 0);
+                    if (!isNaN(start) && start > 10) {
+                        args.push(`--start=${Math.floor(start)}`);
+                    }
+                    args.push(streamUrl);
+                    const mpvProcess = spawn(mpvPath, args, { stdio: 'ignore' });
+                    mpvProcess.on('close', () => {
+                        console.log('[XDmovies] MPV closed');
+                    });
+                    resolve({ success: true, message: 'MPV launched' });
+                } catch (error) {
+                    console.error('[XDmovies] Error:', error);
+                    resolve({ success: false, message: error.message });
+                }
+            });
+        }
+    });
+
     // Helper function to get local network IP
     function getLocalNetworkIP(targetDeviceIP = null) {
         const interfaces = os.networkInterfaces();
@@ -3421,152 +3518,144 @@ if (!gotLock) {
     });
 }
 
-// Graceful shutdown flag
+// --- Graceful shutdown flags ---
 let isShuttingDown = false;
 let cleanupComplete = false;
 
-// Graceful shutdown function
+// --- Graceful shutdown function ---
 async function performGracefulShutdown() {
     if (isShuttingDown) return;
     isShuttingDown = true;
-    // Ensure no auto-restarts or background tasks continue
     app.isQuitting = true;
-    
+
     console.log('[Shutdown] Starting graceful shutdown...');
-    
+
+    // 1-second fallback crash
+    const fallback = setTimeout(() => {
+        console.warn('[Shutdown] Fallback: force crash after 1s...');
+        process.exit(1);
+    }, 1000);
+
     try {
-        // Clear API cache on exit
+        // --- Clear API cache ---
         console.log('[Shutdown] Clearing API cache...');
         if (global.clearApiCache) {
-            try {
-                global.clearApiCache();
-            } catch (error) {
+            try { global.clearApiCache(); } catch (error) {
                 console.error('[Shutdown] Error clearing cache:', error);
             }
         }
-        
-        // Clean up Discord RPC
+
+        // --- Discord RPC cleanup ---
         console.log('[Shutdown] Cleaning up Discord RPC...');
-        try {
-            if (discordRpc) {
-                try { await discordRpc.clearActivity(); } catch(_) {}
-                try { discordRpc.destroy(); } catch(_) {}
-                discordRpc = null;
-            }
-        } catch(_) {}
-        
-        // Shut down the webtorrent client FIRST (before server)
+        if (discordRpc) {
+            try { await discordRpc.clearActivity(); } catch (_) {}
+            try { discordRpc.destroy(); } catch (_) {}
+            discordRpc = null;
+        }
+
+        // --- WebTorrent client ---
         console.log('[Shutdown] Destroying WebTorrent client...');
         if (webtorrentClient) {
             await new Promise((resolve) => {
                 try {
-                    // Remove all torrents first
                     const torrents = webtorrentClient.torrents.slice();
                     console.log(`[Shutdown] Destroying ${torrents.length} torrents...`);
-                    torrents.forEach(torrent => {
-                        try {
-                            torrent.destroy();
-                        } catch (e) {
-                            console.error('[Shutdown] Error destroying torrent:', e);
-                        }
-                    });
-                    
-                    // Then destroy the client
+                    torrents.forEach(t => { try { t.destroy(); } catch (_) {} });
+
                     webtorrentClient.destroy((err) => {
                         if (err) console.error('[Shutdown] WebTorrent destroy error:', err);
                         else console.log('[Shutdown] WebTorrent client destroyed.');
                         webtorrentClient = null;
                         resolve();
                     });
-                    
-                    // Force resolve after 2 seconds
-                    setTimeout(resolve, 2000);
+
+                    setTimeout(resolve, 2000); // safety timeout
                 } catch (e) {
                     console.error('[Shutdown] Error during WebTorrent cleanup:', e);
                     resolve();
                 }
             });
         }
-        
-        // Shut down the HTTP server
+
+        // --- HTTP Server ---
         console.log('[Shutdown] Closing HTTP server...');
         if (httpServer) {
             await new Promise((resolve) => {
                 try {
-                    // Close server and all connections
                     if (typeof httpServer.destroyAllSockets === 'function') {
                         try {
                             const n = httpServer.getActiveSocketCount ? httpServer.getActiveSocketCount() : undefined;
                             console.log(`[Shutdown] Destroying active sockets${n !== undefined ? ` (${n})` : ''}...`);
-                        } catch(_) {}
+                        } catch (_) {}
                         httpServer.destroyAllSockets();
                     } else {
                         httpServer.closeAllConnections && httpServer.closeAllConnections();
                     }
+
                     httpServer.close((err) => {
                         if (err) console.error('[Shutdown] HTTP server close error:', err);
                         else console.log('[Shutdown] HTTP server closed.');
                         httpServer = null;
                         resolve();
                     });
-                    
-                    // Force resolve after 2 seconds
-                    setTimeout(resolve, 2000);
+
+                    setTimeout(resolve, 2000); // safety timeout
                 } catch (e) {
                     console.error('[Shutdown] Error closing HTTP server:', e);
                     resolve();
                 }
             });
         }
-        
+
         console.log('[Shutdown] Cleanup complete.');
         cleanupComplete = true;
-        // Hard-exit to guarantee all processes (including the console host) terminate
-        try { process.exit(0); } catch(_) { app.exit(0); }
+
+        clearTimeout(fallback); // stop fallback crash
+        process.exit(0);
+
     } catch (error) {
         console.error('[Shutdown] Error during shutdown:', error);
         cleanupComplete = true;
-        try { process.exit(1); } catch(_) { app.exit(1); }
+        clearTimeout(fallback);
+        process.exit(1);
     }
 }
 
-// Before quit - run cleanup
+// --- Attach to main window ---
+if (mainWindow) { // replace mainWindow with your actual variable
+    mainWindow.on('close', (e) => {
+        if (!cleanupComplete) {
+            console.log('[Window] Close requested; starting graceful shutdown...');
+            e.preventDefault();
+            performGracefulShutdown();
+        }
+    });
+}
+
+// --- Electron app hooks ---
 app.on('before-quit', async (event) => {
     if (!cleanupComplete) {
         event.preventDefault();
         await performGracefulShutdown();
-        // performGracefulShutdown will force-exit; this is just a safeguard
-        try { app.exit(0); } catch(_) {}
     }
 });
 
-// Will quit - final check
 app.on('will-quit', (event) => {
     app.isQuitting = true;
-    
+
     if (!cleanupComplete) {
         console.warn('[Shutdown] Cleanup not complete in will-quit, forcing...');
         event.preventDefault();
-        
-        // Force cleanup with timeout
-        const forceQuit = setTimeout(() => {
-            console.warn('[Shutdown] Force exiting...');
+        setTimeout(() => {
+            console.warn('[Shutdown] Force exiting after will-quit timeout...');
             process.exit(0);
         }, 3000);
-        
-        performGracefulShutdown(); // it will call process.exit itself
-    }
-});
-
-// Ensure closing the last window triggers graceful shutdown explicitly (especially on Windows)
-app.on('window-all-closed', () => {
-    if (!cleanupComplete) {
         performGracefulShutdown();
-    } else {
-        try { process.exit(0); } catch(_) { app.exit(0); }
     }
 });
 
+// --- window-all-closed handler ---
 app.on('window-all-closed', () => {
+    if (!cleanupComplete) performGracefulShutdown();
     if (process.platform !== 'darwin') app.quit();
 });

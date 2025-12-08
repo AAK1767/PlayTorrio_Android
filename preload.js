@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openVLCDirect: (url) => ipcRenderer.invoke('open-vlc-direct', url),
   // IINA external player (macOS)
   openInIINA: (data) => ipcRenderer.invoke('open-in-iina', data),
+  // XDmovies play handler (platform-aware)
+  playXDMovies: (data) => ipcRenderer.invoke('play-xdmovies', data),
   castToChromecast: (data) => ipcRenderer.invoke('cast-to-chromecast', data),
   discoverChromecastDevices: () => ipcRenderer.invoke('discover-chromecast-devices'),
   onStreamClosed: (callback) => ipcRenderer.on('stream-closed', callback),

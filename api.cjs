@@ -1622,6 +1622,269 @@ app.get('/moviebox/api/:query', moviebox_handleSearch);
 app.get('/api/moviebox/:query', moviebox_handleSearch);
 
 // ============================================================================
+// XDMOVIES SERVICE
+// ============================================================================
+
+app.get('/api/xdmovies/:tmdbid', async (req, res) => {
+    try {
+      const tmdbId = req.params.tmdbid;
+      const { type } = req.query;
+
+      if (type === 'tv') {
+        return res.status(400).json({ success: false, message: 'XDmovies only supports movies, not TV shows.' });
+      }
+  
+      // First, get the movie URL from the previous endpoint call
+      // We'll fetch the xdmovies page URL
+      const tmdbResponse = await axios.get(`${lib111477_TMDB_BASE_URL}/movie/${tmdbId}`, {
+        params: {
+          api_key: lib111477_TMDB_API_KEY
+        }
+      });
+  
+      // Check if the request returned a TV show instead (sometimes TMDB API returns TV data even when querying movie endpoint)
+      if (tmdbResponse.data.first_air_date && !tmdbResponse.data.release_date) {
+        return res.status(400).json({ success: false, message: 'XDmovies is for movies only, not TV shows.' });
+      }
+
+      const movieTitle = tmdbResponse.data.title;
+      const releaseDate = tmdbResponse.data.release_date;
+      const releaseYear = releaseDate ? releaseDate.split('-')[0] : null;
+  
+      // Get token
+      const tokenResponse = await axios.get('https://xdmovies.site/php/get_token.php', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+          'Referer': 'https://xdmovies.site/search.html',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.6',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+  
+      const token = tokenResponse.data.token;
+  
+      // Search for the movie
+      const xdmoviesResponse = await axios.get('https://xdmovies.site/php/search_api.php', {
+        params: {
+          query: movieTitle,
+          fuzzy: true
+        },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+          'Referer': 'https://xdmovies.site/search.html?q=' + encodeURIComponent(movieTitle),
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.6',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Content-Type': 'application/json',
+          'X-Auth-Token': token,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Sec-Fetch-Dest': 'empty',
+          'Sec-Fetch-Mode': 'cors',
+          'Sec-Fetch-Site': 'same-origin'
+        }
+      });
+  
+      const results = xdmoviesResponse.data;
+      const matchedMovie = results.find(movie => movie.release_year === releaseYear && movie.title.toLowerCase() === movieTitle.toLowerCase());
+  
+      if (!matchedMovie) {
+        return res.json({ success: false, message: 'Movie not found' });
+      }
+  
+      const moviePageUrl = `https://xdmovies.site${matchedMovie.path}`;
+  
+      // Fetch the movie page
+      const pageResponse = await axios.get(moviePageUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+          'Referer': 'https://xdmovies.site/',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.6',
+          'Accept-Encoding': 'gzip, deflate, br'
+        }
+      });
+  
+      const $ = cheerio.load(pageResponse.data);
+      const downloads = [];
+  
+      // Extract download links and sizes
+      $('.download-item').each((index, element) => {
+        const titleElement = $(element).find('.custom-title');
+        const linkElement = $(element).find('.movie-download-btn');
+  
+        if (titleElement && linkElement) {
+          const title = titleElement.text().trim();
+          const link = linkElement.attr('href');
+          const size = linkElement.text().trim(); // Gets text like "1.20 GB"
+  
+          if (link && size) {
+            downloads.push({
+              title: title,
+              link: link,
+              size: size
+            });
+          }
+        }
+      });
+  
+      if (downloads.length === 0) {
+        return res.json({ success: false, message: 'No download links found' });
+      }
+  
+      // Fetch actual download links from each link
+      const downloadLinksWithRealLinks = await Promise.all(
+        downloads.map(async (download) => {
+          try {
+            const pageResponse = await axios.get(download.link, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+                'Referer': moviePageUrl,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.6',
+                'Accept-Encoding': 'gzip, deflate, br'
+              },
+              maxRedirects: 5
+            });
+  
+            const $page = cheerio.load(pageResponse.data);
+            const downloadBtn = $page('a#download');
+            const proxyLink = downloadBtn.attr('href');
+  
+            let finalLinks = [];
+            if (!proxyLink) {
+              return {
+                title: download.title,
+                size: download.size,
+                serverLinks: []
+              };
+            }
+  
+            // Now fetch the proxy link to get the final download servers
+            try {
+              const finalPageResponse = await axios.get(proxyLink, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+                  'Referer': 'https://xdmovies.site/',
+                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                  'Accept-Language': 'en-US,en;q=0.8',
+                  'Accept-Encoding': 'gzip, deflate, br',
+                  'Cookie': 'xyt=1'
+                },
+                maxRedirects: 5
+              });
+  
+              const $final = cheerio.load(finalPageResponse.data);
+              // Extract all download server links
+              const serverLinkElements = $final('a.btn.btn-lg.h6');
+              for (let i = 0; i < serverLinkElements.length; i++) {
+                const element = serverLinkElements[i];
+                const link = $final(element).attr('href');
+                const fullText = $final(element).text().trim();
+                let serverName = 'Unknown Server';
+                
+                if (fullText.includes('FSL Server')) {
+                  serverName = 'FSL Server';
+                } else if (fullText.includes('10Gbps')) {
+                  serverName = '10Gbps';
+                } else if (fullText.includes('PixelServer')) {
+                  serverName = 'PixelServer';
+                }
+  
+                // For PixelServer and 10Gbps, follow the link and extract the final download link from <a id="vd"> or meta tags
+                let realDownloadLink = link;
+                if (serverName.toLowerCase().includes('pixelserver')) {
+                  continue; // Skip PixelServer links
+                }
+                if (serverName.toLowerCase().includes('pixel') || serverName.toLowerCase().includes('10gbps')) {
+                  try {
+                    const pixelResp = await axios.get(link, {
+                      headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+                        'Referer': proxyLink,
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.8',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Cookie': 'xyt=1'
+                      },
+                      maxRedirects: 5
+                    });
+                    const $pixel = cheerio.load(pixelResp.data);
+                    // Try <a id="vd">
+                    const vdLink = $pixel('a#vd').attr('href');
+                    if (vdLink) {
+                      realDownloadLink = vdLink;
+                    } else {
+                      // Try meta tags
+                      const ogVideo = $pixel('meta[property="og:video"]').attr('content');
+                      const ogVideoUrl = $pixel('meta[property="og:video:url"]').attr('content');
+                      const ogVideoSecure = $pixel('meta[property="og:video:secure_url"]').attr('content');
+                      if (ogVideoSecure) {
+                        realDownloadLink = ogVideoSecure;
+                      } else if (ogVideoUrl) {
+                        realDownloadLink = ogVideoUrl;
+                      } else if (ogVideo) {
+                        realDownloadLink = ogVideo;
+                      }
+                    }
+                  } catch (err) {
+                    // fallback to original link
+                  }
+                }
+                if (realDownloadLink) {
+                  finalLinks.push({
+                    name: serverName,
+                    url: realDownloadLink
+                  });
+                }
+              }
+  
+              // Handle TRS Server separately
+              const trsScript = $final('script:contains("getElementById(\'mega\')")').html();
+              if (trsScript) {
+                  const match = trsScript.match(/window\.location\.href = '([^']*)'/);
+                  if (match && match[1]) {
+                      finalLinks.push({
+                          name: 'TRS Server',
+                          url: match[1]
+                      });
+                  }
+              }
+            } catch (error) {
+              console.error('Error fetching final links from:', proxyLink, error.message);
+            }
+  
+            return {
+              title: download.title,
+              size: download.size,
+              proxyLink: proxyLink,
+              serverLinks: finalLinks
+            };
+          } catch (error) {
+            console.error('Error fetching real link from:', download.link, error.message);
+            return {
+              title: download.title,
+              size: download.size,
+              serverLinks: []
+            };
+          }
+        })
+      );
+  
+      res.json({
+        success: true,
+        movie: matchedMovie.title,
+        url: moviePageUrl,
+        downloads: downloadLinksWithRealLinks
+      });
+    } catch (error) {
+      console.error('Error scraping xdmovies:', error.message);
+      res.status(500).json({ success: false, error: 'Failed to scrape download links' });
+    }
+});
+
+// ============================================================================
 // Z-LIBRARY SERVICE (from z-lib.js)
 // ============================================================================
 
@@ -2416,16 +2679,13 @@ app.get('/', (req, res) => {
                 },
                 example: 'http://localhost:6987/zlib/search/python%20programming'
             },
-            moviebox: {
-                description: 'MovieBox/FMovies scraper with TMDB lookup',
+            xdmovies: {
+                description: 'Movie scraper from xdmovies.site (Movies Only)',
                 endpoints: {
-                    health: '/moviebox/health',
-                    info: '/moviebox/',
-                    search: '/moviebox/api/{query}',
-                    movieByTmdbId: '/moviebox/{tmdbId}',
-                    tvByTmdbId: '/moviebox/tv/{tmdbId}/{season}/{episode}'
+                    movieByTmdbId: '/api/xdmovies/:tmdbid',
                 },
-                example: 'http://localhost:6987/moviebox/api/Greys%20anatomy?mode=prefix&se=22&ep=1'
+                example: 'http://localhost:6987/api/xdmovies/550',
+                note: 'XDmovies supports movies only. TV shows will return an error.'
             },
             otherbook: {
                 description: 'Book search via RandomBook/LibGen with covers',
@@ -4292,6 +4552,245 @@ app.get('/api/chapter/pages', async (req, res) => {
     });
   }
 });
+
+// ---- MOVIEBOX ASTRA SINGLE ENDPOINT ---- //
+
+const axios = require("axios");
+const CryptoJS = require("crypto-js");
+const fetch = require("node-fetch").default;
+
+const MOVIEBOX_KEY = "x7k9mPqT2rWvY8zA5bC3nF6hJ2lK4mN9";
+const MOVIEBOX_IV = MOVIEBOX_KEY.substring(0, 16);
+
+function movieboxEncrypt(str) {
+    const key = CryptoJS.enc.Utf8.parse(MOVIEBOX_KEY);
+    const iv = CryptoJS.enc.Utf8.parse(MOVIEBOX_IV);
+    let enc = CryptoJS.AES.encrypt(str, key, { iv }).ciphertext.toString(CryptoJS.enc.Base64);
+    return enc.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function movieboxGetPlaylist(astraUrl) {
+    const resp = await axios.get(astraUrl);
+    const list = resp.data;
+
+    return list.map(item => {
+        let rawUrl = item.url;
+
+        // decode proxy.vidrock.store/<URL>
+        if (rawUrl.includes("proxy.vidrock.store/")) {
+            const match = rawUrl.match(/proxy\.vidrock\.store\/(.*?)$/);
+            if (match) rawUrl = decodeURIComponent(match[1]);
+        }
+
+        // final stream URL = proxied URL (IMPORTANT)
+        const proxyUrl = `http://localhost:6987/proxy?url=${encodeURIComponent(rawUrl)}`;
+
+        return {
+            resolution: item.resolution,
+            url: proxyUrl,   // <--- THIS IS THE ONE YOU PLAY
+            rawUrl
+        };
+    });
+}
+
+// ------------------------------------------ //
+//    SINGLE ROUTE (MOVIE + TV COMBINED)      //
+// ------------------------------------------ //
+
+app.get("/moviebox/:tmdbId/:season?/:episode?", async (req, res) => {
+    try {
+        const { tmdbId, season, episode } = req.params;
+
+        let encoded;
+        let fetchUrl;
+        let referer;
+
+        if (!season || !episode) {
+            // MOVIE
+            encoded = movieboxEncrypt(tmdbId);
+            fetchUrl = `https://vidrock.net/api/movie/${encoded}`;
+            referer = `https://vidrock.net/movie/${tmdbId}`;
+        } else {
+            // TV
+            encoded = movieboxEncrypt(`${tmdbId}_${season}_${episode}`);
+            fetchUrl = `https://vidrock.net/api/tv/${encoded}`;
+            referer = `https://vidrock.net/tv/${tmdbId}/${season}/${episode}`;
+        }
+
+        const info = await axios.get(fetchUrl, { headers: { Referer: referer } });
+        const astra = info.data.Astra;
+
+        if (!astra || !astra.url)
+            return res.json({ error: "No Astra source available" });
+
+        const playlist = await movieboxGetPlaylist(astra.url);
+
+        return res.json({
+            Astra: {
+                language: astra.language,
+                flag: astra.flag,
+                playlist
+            }
+        });
+
+    } catch (err) {
+        console.error("MovieBox error:", err.message);
+        res.status(500).json({ error: "MovieBox failed" });
+    }
+});
+
+// ---- END MOVIEBOX SINGLE ENDPOINT ---- //
+
+// MOVIEBOX ASTRA - MOVIE
+app.get("/api/astra/:tmdbId", async (req, res) => {
+    try {
+        const tmdbId = req.params.tmdbId;
+
+        const key = "x7k9mPqT2rWvY8zA5bC3nF6hJ2lK4mN9";
+        const iv = key.substring(0, 16);
+
+        const enc = require("crypto-js").AES.encrypt(
+            tmdbId,
+            require("crypto-js").enc.Utf8.parse(key),
+            { iv: require("crypto-js").enc.Utf8.parse(iv) }
+        ).ciphertext.toString(require("crypto-js").enc.Base64)
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/, "");
+
+        const apiURL = `https://vidrock.net/api/movie/${enc}`;
+        const referer = `https://vidrock.net/movie/${tmdbId}`;
+
+        const axios = require("axios");
+        const base = await axios.get(apiURL, { headers: { Referer: referer } });
+
+        const astra = base.data.Astra;
+        if (!astra || !astra.url) return res.json({ error: "No Astra available" });
+
+        const playlistResp = await axios.get(astra.url);
+        const playlist = playlistResp.data;
+
+        const finalPlaylist = playlist.map(p => {
+            let raw = p.url;
+
+            if (raw.includes("proxy.vidrock.store")) {
+                const m = raw.match(/proxy\.vidrock\.store\/(.*?)$/);
+                if (m) raw = decodeURIComponent(m[1]);
+            }
+
+            return {
+                resolution: p.resolution,
+                url: `http://localhost:6987/proxy?url=${encodeURIComponent(raw)}`,
+                rawUrl: raw
+            };
+        });
+
+        res.json({
+            Astra: {
+                language: astra.language,
+                flag: astra.flag,
+                playlist: finalPlaylist
+            }
+        });
+
+    } catch (err) {
+        console.log("Astra Movie Error:", err.message);
+        res.json({ error: "MovieBox failed" });
+    }
+});
+
+// MOVIEBOX ASTRA - TV
+app.get("/api/tv/:tmdbId/:season/:episode", async (req, res) => {
+    try {
+        const { tmdbId, season, episode } = req.params;
+
+        const key = "x7k9mPqT2rWvY8zA5bC3nF6hJ2lK4mN9";
+        const iv = key.substring(0, 16);
+
+        const combined = `${tmdbId}_${season}_${episode}`;
+
+        const enc = require("crypto-js").AES.encrypt(
+            combined,
+            require("crypto-js").enc.Utf8.parse(key),
+            { iv: require("crypto-js").enc.Utf8.parse(iv) }
+        ).ciphertext.toString(require("crypto-js").enc.Base64)
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/, "");
+
+        const axios = require("axios");
+        const apiURL = `https://vidrock.net/api/tv/${enc}`;
+        const referer = `https://vidrock.net/tv/${tmdbId}/${season}/${episode}`;
+
+        const base = await axios.get(apiURL, { headers: { Referer: referer } });
+
+        const astra = base.data.Astra;
+        if (!astra || !astra.url) return res.json({ error: "No Astra available" });
+
+        const playlistResp = await axios.get(astra.url);
+        const playlist = playlistResp.data;
+
+        const finalPlaylist = playlist.map(p => {
+            let raw = p.url;
+
+            if (raw.includes("proxy.vidrock.store")) {
+                const m = raw.match(/proxy\.vidrock\.store\/(.*?)$/);
+                if (m) raw = decodeURIComponent(m[1]);
+            }
+
+            return {
+                resolution: p.resolution,
+                url: `http://localhost:6987/proxy?url=${encodeURIComponent(raw)}`,
+                rawUrl: raw
+            };
+        });
+
+        res.json({
+            Astra: {
+                language: astra.language,
+                flag: astra.flag,
+                playlist: finalPlaylist
+            }
+        });
+
+    } catch (err) {
+        console.log("Astra TV Error:", err.message);
+        res.json({ error: "MovieBox failed" });
+    }
+});
+
+app.get("/proxy", async (req, res) => {
+    const target = req.query.url;
+    if (!target) return res.status(400).json({ error: "Missing url parameter" });
+
+    try {
+        const proxyHeaders = {
+            "User-Agent": req.headers["user-agent"] || "Mozilla/5.0",
+            "Accept": "*/*",
+            "Referer": "https://fmoviesunblocked.net/",
+        };
+
+        if (req.headers["range"]) {
+            proxyHeaders["Range"] = req.headers["range"];
+        }
+
+        const upstream = await fetch(target, {
+            method: "GET",
+            headers: proxyHeaders
+        });
+
+        const headers = {};
+        upstream.headers.forEach((v, k) => { headers[k] = v });
+
+        res.writeHead(upstream.status, headers);
+        upstream.body.pipe(res);
+
+    } catch (err) {
+        console.error("Proxy error:", err.message);
+        res.status(500).json({ error: "Proxy failed" });
+    }
+});
+
 
 // ============================================================================
 // ERROR HANDLERS & SERVER STARTUP

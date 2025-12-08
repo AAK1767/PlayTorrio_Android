@@ -860,176 +860,154 @@ export function startServer(userDataPath, executablePath = null) {
     }
 
     // --- TorBox minimal adapter ---
-    const TB_BASE = 'https://api.torbox.app/v1';
-    async function tbFetch(endpoint, opts = {}) {
-        const s = readSettings();
-        if (!s.tbApiKey) throw new Error('Not authenticated with TorBox');
-        const url = `${TB_BASE}${endpoint}`;
-        console.log('[TB][call]', { endpoint, method: (opts.method || 'GET').toUpperCase() });
-        let resp;
-        try {
-            resp = await safeFetch(url, { ...opts, headers: { Authorization: `Bearer ${s.tbApiKey}`, Accept: 'application/json', ...(opts.headers || {}) } });
-        } catch (e) {
-            if (e?.code === 'NETWORK_UNREACHABLE') {
-                const err = new Error('TorBox is unreachable right now.');
-                err.code = 'TB_NETWORK';
-                throw err;
-            }
-            throw e;
-        }
-        const ct = resp.headers.get('content-type') || '';
-        let bodyText = '';
-        try { bodyText = await resp.text(); } catch {}
-        let data = null;
-        if (/json/i.test(ct)) {
-            try { data = bodyText ? JSON.parse(bodyText) : null; } catch {}
-        }
-        if (!resp.ok) {
-            const lower = (bodyText || '').toLowerCase();
-            // Clear token on auth errors
-            if (resp.status === 401 || lower.includes('unauthorized') || lower.includes('invalid token')) {
-                try { const cur = readSettings(); writeSettings({ ...cur, tbApiKey: null }); } catch {}
-                const err = new Error('TorBox authentication invalid'); err.code = 'TB_AUTH_INVALID'; throw err;
-            }
-            if (resp.status === 429 || lower.includes('rate')) { const err = new Error('TorBox rate limited'); err.code = 'TB_RATE_LIMIT'; throw err; }
-            if (resp.status === 402 || lower.includes('premium')) { const err = new Error('TorBox premium required'); err.code = 'RD_PREMIUM_REQUIRED'; throw err; }
-            const err = new Error(`TB ${endpoint} failed: ${resp.status} ${truncate(bodyText, 300)}`);
+const TB_BASE = 'https://api.torbox.app/v1';
+
+async function tbFetch(endpoint, opts = {}) {
+    const s = readSettings();
+    if (!s.tbApiKey) throw new Error('Not authenticated with TorBox');
+
+    const url = `${TB_BASE}${endpoint}`;
+    console.log('[TB][call]', { endpoint, method: (opts.method || 'GET').toUpperCase() });
+
+    let resp;
+    try {
+        resp = await safeFetch(url, { ...opts, headers: { Authorization: `Bearer ${s.tbApiKey}`, Accept: 'application/json', ...(opts.headers || {}) } });
+    } catch (e) {
+        if (e?.code === 'NETWORK_UNREACHABLE') {
+            const err = new Error('TorBox is unreachable right now.');
+            err.code = 'TB_NETWORK';
             throw err;
         }
-        return data != null ? data : bodyText;
+        throw e;
     }
 
-    // Robust TorBox: try multiple payloads/endpoints for creating a torrent from a magnet
-    async function tbCreateTorrentFromMagnet(magnet) {
-        const attempts = [
-            { ep: '/api/torrents/createtorrent', type: 'form', body: { link: magnet } },
-            { ep: '/api/torrents/createtorrent', type: 'form', body: { magnet: magnet } },
-            { ep: '/api/torrents/createtorrent', type: 'json', body: { link: magnet } },
-            { ep: '/api/torrents/createtorrent', type: 'json', body: { magnet_link: magnet } },
-            { ep: '/api/torrents/addmagnet',     type: 'form', body: { link: magnet } },
-            { ep: '/api/torrents/addmagnet',     type: 'form', body: { magnet: magnet } },
-        ];
-        let lastErr = null;
-        for (const a of attempts) {
-            try {
-                const headers = a.type === 'json'
-                    ? { 'Content-Type': 'application/json' }
-                    : { 'Content-Type': 'application/x-www-form-urlencoded' };
-                const body = a.type === 'json'
-                    ? JSON.stringify(a.body)
-                    : new URLSearchParams(a.body);
-                const r = await tbFetch(a.ep, { method: 'POST', headers, body });
-                // Normalize id from different shapes
-                const id = r?.id || r?.torrent_id || r?.data?.id || r?.data?.torrent_id;
-                if (id) return { ok: true, id: String(id), raw: r };
-                // Some APIs wrap under data.torrent
-                const did = r?.data?.torrent?.id || r?.data?.torrent_id;
-                if (did) return { ok: true, id: String(did), raw: r };
-                lastErr = new Error('TorBox create returned no id');
-            } catch (e) {
-                lastErr = e;
-                // If missing required option, try next shape
-                const msg = (e?.message || '').toLowerCase();
-                if (/missing_required_option|missing|required/.test(msg)) continue;
-                // Auth/rate handled by caller via codes thrown in tbFetch
-            }
+    const ct = resp.headers.get('content-type') || '';
+    let bodyText = '';
+    try { bodyText = await resp.text(); } catch {}
+
+    let data = null;
+    if (/json/i.test(ct)) {
+        try { data = bodyText ? JSON.parse(bodyText) : null; } catch {}
+    }
+
+    if (!resp.ok) {
+        const lower = (bodyText || '').toLowerCase();
+        if (resp.status === 401 || lower.includes('unauthorized') || lower.includes('invalid token')) {
+            try { const cur = readSettings(); writeSettings({ ...cur, tbApiKey: null }); } catch {}
+            const err = new Error('TorBox authentication invalid'); err.code = 'TB_AUTH_INVALID'; throw err;
         }
-        if (lastErr) throw lastErr;
-        throw new Error('Failed to create TorBox torrent');
+        if (resp.status === 429 || lower.includes('rate')) { const err = new Error('TorBox rate limited'); err.code = 'TB_RATE_LIMIT'; throw err; }
+        if (resp.status === 402 || lower.includes('premium')) { const err = new Error('TorBox premium required'); err.code = 'RD_PREMIUM_REQUIRED'; throw err; }
+        const err = new Error(`TB ${endpoint} failed: ${resp.status} ${truncate(bodyText, 300)}`);
+        throw err;
     }
 
-    // Get a TorBox direct link for streaming using official API
-    // Per official docs: GET /torrents/requestdl?token=KEY&torrent_id=ID&file_id=FILE&redirect=true
-    // This returns a permanent streaming URL that works directly in video players
-    async function tbRequestDirectLink(torrentId, fileId) {
-        const s = readSettings();
-        if (!s.tbApiKey) throw new Error('Not authenticated with TorBox');
-        
-        // Official API endpoint: /api/torrents/requestdl with query params
-        // redirect=true returns a permanent CDN URL for streaming
-        const qs = new URLSearchParams({
-            token: s.tbApiKey,
-            torrent_id: String(torrentId),
-            file_id: String(fileId),
-            redirect: 'true'  // Returns permanent URL instead of temporary link
-        });
-        
-        const url = `${TB_BASE}/api/torrents/requestdl?${qs.toString()}`;
-        console.log('[TB][requestdl] calling:', url.replace(s.tbApiKey, 'API_KEY'));
-        
+    return data != null ? data : bodyText;
+}
+
+// Create a torrent from magnet
+async function tbCreateTorrentFromMagnet(magnet) {
+    const attempts = [
+        { ep: '/api/torrents/createtorrent', type: 'form', body: { link: magnet } },
+        { ep: '/api/torrents/createtorrent', type: 'form', body: { magnet: magnet } },
+        { ep: '/api/torrents/createtorrent', type: 'json', body: { link: magnet } },
+        { ep: '/api/torrents/createtorrent', type: 'json', body: { magnet_link: magnet } },
+        { ep: '/api/torrents/addmagnet',     type: 'form', body: { link: magnet } },
+        { ep: '/api/torrents/addmagnet',     type: 'form', body: { magnet: magnet } },
+    ];
+
+    let lastErr = null;
+    for (const a of attempts) {
         try {
-            // With redirect=true, API returns the direct CDN URL
-            // Can be used as permanent streaming link
-            const resp = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${s.tbApiKey}`,
-                    'Accept': '*/*'
-                },
-                redirect: 'follow'  // Follow redirects to get final URL
-            });
-            
-            if (!resp.ok) {
-                const text = await resp.text();
-                console.error('[TB][requestdl] HTTP error:', resp.status, text);
-                
-                // Handle specific error cases
-                if (resp.status === 401) {
-                    throw new Error('TorBox authentication invalid');
-                }
-                if (resp.status === 404) {
-                    throw new Error('TorBox torrent or file not found');
-                }
-                if (resp.status === 429) {
-                    throw new Error('TorBox rate limited');
-                }
-                
-                throw new Error(`TorBox requestdl failed: ${resp.status} ${text}`);
-            }
-            
-            // The response should be the direct CDN URL as plain text or redirect
-            const directUrl = resp.url; // Final URL after redirects
-            
-            if (directUrl && /^https?:\/\//i.test(directUrl)) {
-                console.log('[TB][requestdl] success, CDN URL obtained');
-                return directUrl;
-            }
-            
-            // Fallback: try reading response body
-            const text = await resp.text();
-            if (text && /^https?:\/\//i.test(text.trim())) {
-                console.log('[TB][requestdl] success from response body');
-                return text.trim();
-            }
-            
-            throw new Error('TorBox requestdl returned no valid URL');
+            const headers = a.type === 'json'
+                ? { 'Content-Type': 'application/json' }
+                : { 'Content-Type': 'application/x-www-form-urlencoded' };
+            const body = a.type === 'json' ? JSON.stringify(a.body) : new URLSearchParams(a.body);
+            const r = await tbFetch(a.ep, { method: 'POST', headers, body });
+
+            const id = r?.id || r?.torrent_id || r?.data?.id || r?.data?.torrent_id || r?.data?.torrent?.id;
+            if (id) return { ok: true, id: String(id), raw: r };
+            lastErr = new Error('TorBox create returned no id');
         } catch (e) {
-            console.error('[TB][requestdl] error:', e.message);
-            throw e;
+            lastErr = e;
+            const msg = (e?.message || '').toLowerCase();
+            if (/missing_required_option|missing|required/.test(msg)) continue;
         }
     }
 
-    function extractHttpUrls(obj, out = []) {
-        if (!obj) return out;
-        if (typeof obj === 'string') {
-            if (/^https?:\/\//i.test(obj)) out.push(obj);
-            return out;
-        }
-        if (Array.isArray(obj)) {
-            for (const v of obj) extractHttpUrls(v, out);
-            return out;
-        }
-        if (typeof obj === 'object') {
-            for (const [k, v] of Object.entries(obj)) {
-                if (typeof v === 'string') {
-                    if (/^https?:\/\//i.test(v)) out.push(v);
-                } else if (v && (typeof v === 'object' || Array.isArray(v))) {
-                    extractHttpUrls(v, out);
-                }
-            }
-        }
-        return out;
+    if (lastErr) throw lastErr;
+    throw new Error('Failed to create TorBox torrent');
+}
+
+// Get a permanent direct streaming URL
+async function tbRequestDirectLink(torrentId, fileId = 0) {
+    const s = readSettings();
+    if (!s.tbApiKey) throw new Error('Not authenticated with TorBox');
+
+    const qs = new URLSearchParams({
+        token: s.tbApiKey,
+        torrent_id: String(torrentId),
+        file_id: String(fileId),
+        redirect: 'true'
+    });
+
+    const url = `${TB_BASE}/api/torrents/requestdl?${qs.toString()}`;
+    console.log('[TB][requestdl] calling:', url.replace(s.tbApiKey, 'API_KEY'));
+
+    const resp = await fetch(url, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${s.tbApiKey}`, Accept: '*/*' },
+        redirect: 'follow'
+    });
+
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`TorBox requestdl failed: ${resp.status} ${text}`);
     }
+
+    return resp.url || (await resp.text()).trim();
+}
+
+// Fetch torrent info and return streamable link
+async function tbGetStreamUrl(torrentId, timeout = 30_000) {
+    const start = Date.now();
+
+    while (true) {
+        const data = await tbFetch(`/api/torrents/mylist?id=${torrentId}&bypassCache=true`);
+        if (!data?.files || !data.files.length) throw new Error('No files found in torrent');
+
+        const fileId = data.files[0].id; // Use the raw file.id directly
+        if (fileId == null) throw new Error('Torrent file has no ID');
+
+        if (data.cached) { // Torrent is cached
+            const streamUrl = await tbRequestDirectLink(torrentId, fileId);
+            console.log('[TB] Streaming URL ready:', streamUrl);
+            return streamUrl;
+        }
+
+        if (Date.now() - start > timeout) {
+            throw new Error('Torrent not cached within timeout');
+        }
+
+        console.log('[TB] Waiting for torrent to be cached...');
+        await new Promise(r => setTimeout(r, 2000));
+    }
+}
+
+
+
+// Example usage
+(async () => {
+    try {
+        const torrent = await tbCreateTorrentFromMagnet('MAGNET_LINK_HERE');
+        const url = await tbGetStreamUrl(torrent.id);
+        console.log('Play this URL in your player:', url);
+    } catch (err) {
+        console.error('TorBox error:', err);
+    }
+})();
+
+
 
     function extractNamedStringDeep(obj, names = []) {
         if (!obj) return null;
@@ -1816,55 +1794,63 @@ export function startServer(userDataPath, executablePath = null) {
                 if (!id) return res.status(500).json({ error: 'Failed to add magnet (TorBox)' });
                 // Fetch files info; may need a short wait for metadata
                 let infoObj = null;
-                for (let i = 0; i < 10; i++) {
-                    try {
-                        const details = await tbFetch(`/api/torrents/mylist?id=${encodeURIComponent(String(id))}&bypassCache=true`);
-                        console.log('[TB][mylist] response:', JSON.stringify(details, null, 2));
-                        // Normalize into our shape
-                        const tor = Array.isArray(details?.data) ? details.data[0] : (details?.data || details || null);
-                        if (tor) {
-                            const files = [];
-                            const rawFiles = tor.files || tor.file_list || [];
-                            const stateRaw = (tor.download_state || tor.downloadState || tor.state || tor.status || '').toString().toLowerCase();
-                            const isCached = stateRaw.includes('cached');
-                            const isStalled = stateRaw.includes('stalled');
-                            const hasFiles = rawFiles.length > 0;
-                            console.log('[TB][files] found', rawFiles.length, 'files, state:', stateRaw, 'cached:', isCached, 'stalled:', isStalled);
-                            
-                            // If stalled with no files/progress and not cached, attempt to request download
-                            if (isStalled && !isCached && !hasFiles && i === 0) {
-                                console.log('[TB][prepare] Torrent is stalled/uncached, attempting to request download...');
-                                try {
-                                    await tbFetch('/api/torrents/controltorrent', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ torrent_id: String(tor.id || id), operation: 'reannounce' })
-                                    });
-                                    console.log('[TB][prepare] Requested reannounce, waiting for peers...');
-                                } catch (controlErr) {
-                                    console.warn('[TB][prepare] Failed to control torrent:', controlErr?.message);
-                                }
-                            }
-                            
-                            let counter = 1;
-                            for (const f of rawFiles) {
-                                // Use the actual file ID from TorBox - they use f.id starting from 0
-                                const fid = f.id !== undefined ? f.id : (f.file_id !== undefined ? f.file_id : (f.index !== undefined ? f.index : counter));
-                                const fname = f.name || f.filename || f.path || `file_${fid}`;
-                                const fsize = Number(f.size || f.bytes || f.length || 0);
-                                console.log('[TB][file]', { originalId: f.id, fileId: f.file_id, index: f.index, mappedId: fid, name: fname });
-                                // Provide a virtual torbox link only when cached; else keep links empty to trigger polling UX
-                                const vlink = `torbox://${id}/${fid}`;
-                                const links = isCached ? [vlink] : [];
-                                files.push({ id: fid, path: fname, filename: fname, bytes: fsize, size: fsize, links });
-                                counter++;
-                            }
-                            infoObj = { id: String(tor.id || id), filename: tor.name || tor.filename || 'TorBox Torrent', files };
-                        }
-                        if (infoObj && infoObj.files && infoObj.files.length) break;
-                    } catch {}
-                    await new Promise(r => setTimeout(r, 800));
+for (let i = 0; i < 10; i++) {
+    try {
+        const details = await tbFetch(`/api/torrents/mylist?id=${encodeURIComponent(String(id))}&bypassCache=true`);
+        console.log('[TB][mylist] response:', JSON.stringify(details, null, 2));
+
+        // Normalize into our shape
+        const tor = Array.isArray(details?.data) ? details.data[0] : (details?.data || details || null);
+
+        if (tor) {
+            const files = [];
+            const rawFiles = tor.files || tor.file_list || [];
+            const isCached = Boolean(tor.cached); // Use explicit cached flag
+            const isStalled = Boolean(tor.stalled || tor.status === 'stalled');
+            const hasFiles = rawFiles.length > 0;
+
+            console.log('[TB][files] found', rawFiles.length, 'cached:', isCached, 'stalled:', isStalled);
+
+            // If stalled with no files/progress and not cached, attempt to request download
+            if (isStalled && !isCached && !hasFiles && i === 0) {
+                console.log('[TB][prepare] Torrent is stalled/uncached, attempting to request download...');
+                try {
+                    await tbFetch('/api/torrents/controltorrent', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ torrent_id: String(tor.id || id), operation: 'reannounce' })
+                    });
+                    console.log('[TB][prepare] Requested reannounce, waiting for peers...');
+                } catch (controlErr) {
+                    console.warn('[TB][prepare] Failed to control torrent:', controlErr?.message);
                 }
+            }
+
+            let counter = 0;
+            for (const f of rawFiles) {
+                const fid = f.id != null ? f.id : counter; // fallback to counter if id missing
+                const fname = f.name || f.filename || f.path || `file_${fid}`;
+                const fsize = Number(f.size || f.bytes || f.length || 0);
+
+                console.log('[TB][file]', { originalId: f.id, fileId: f.file_id, mappedId: fid, name: fname });
+
+                const vlink = `torbox://${id}/${fid}`;
+                const links = isCached ? [vlink] : [];
+
+                files.push({ id: fid, path: fname, filename: fname, bytes: fsize, size: fsize, links });
+                counter++;
+            }
+
+            infoObj = { id: String(tor.id || id), filename: tor.name || tor.filename || 'TorBox Torrent', files };
+        }
+
+        if (infoObj && infoObj.files && infoObj.files.length) break;
+
+    } catch {}
+
+    await new Promise(r => setTimeout(r, 800));
+}
+
                 
                 // If after polling we still have no files, check final state
                 if (!infoObj || !infoObj.files || infoObj.files.length === 0) {

@@ -14,7 +14,7 @@ if [ -z "$APPIMAGE" ]; then
     echo "❌ PlayTorrio.AppImage not found in current directory!"
     echo ""
     echo "Please download PlayTorrio.AppImage first:"
-    echo "https://github.com/ayman707-ux/PlayTorrio/releases/latest"
+    echo "https://github.com/ayman708-UX/PlayTorrio/releases/latest"
     exit 1
 fi
 
