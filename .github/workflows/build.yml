@@ -24,13 +24,18 @@ jobs:
         run: npm install
       - name: Setup Windows Players
         run: |
+          # Extract mpv and supporting files if provided
           if (Test-Path "mpv.rar") { 7z x mpv.rar -y }
           if (Test-Path "mpv.js-master-updated.rar") { 7z x mpv.js-master-updated.rar -y }
           elseif (Test-Path "mpv.zip") { Expand-Archive -Path mpv.zip -DestinationPath mpv-temp -Force }
           if (!(Test-Path "mpv/mpv.exe")) { Write-Host "MPV missing" }
+          # Extract VLC if provided
           if (Test-Path "vlc.rar") { 7z x vlc.rar -y }
-          # Extract yt-dlp binary for Windows (if provided) and remove archive afterwards
-          if (Test-Path "yt.rar") {
+          # Extract yt-dlp binary for Windows (zip preferred, rar for backwards compatibility)
+          if (Test-Path "yt.zip") {
+            7z x yt.zip -y
+            Remove-Item yt.zip -Force
+          } elseif (Test-Path "yt.rar") {
             7z x yt.rar -y
             Remove-Item yt.rar -Force
           }
@@ -71,7 +76,13 @@ jobs:
           [ -f icon.png ] && cp icon.png build/icon.png || true
       - name: Extract yt-dlp binary for Linux
         run: |
-          if [ -f linuxyt.rar ]; then
+          # Extract yt-dlp packaged as zip (preferred) or rar (backwards compatibility)
+          if [ -f linuxyt.zip ]; then
+            sudo apt-get update -y
+            sudo apt-get install -y p7zip-full
+            7z x linuxyt.zip -y
+            rm -f linuxyt.zip
+          elif [ -f linuxyt.rar ]; then
             sudo apt-get update -y
             sudo apt-get install -y p7zip-full
             7z x linuxyt.rar -y
@@ -114,7 +125,12 @@ jobs:
           [ -f mpv.tar.gz ] && tar -xzf mpv.tar.gz -C mpv || true
       - name: Extract yt-dlp binary for macOS
         run: |
-          if [ -f macyt.rar ]; then
+          # Extract yt-dlp packaged as zip (preferred) or rar (backwards compatibility)
+          if [ -f macyt.zip ]; then
+            mkdir -p macyt
+            unzip -o macyt.zip -d macyt
+            rm -f macyt.zip
+          elif [ -f macyt.rar ]; then
             # Use unrar for macOS because p7zip may not support some RAR5 methods
             brew install unrar || true
             unrar x -o+ macyt.rar
@@ -155,7 +171,12 @@ jobs:
           [ -f mpv.tar.gz ] && tar -xzf mpv.tar.gz -C mpv || true
       - name: Extract yt-dlp binary for macOS
         run: |
-          if [ -f macyt.rar ]; then
+          # Extract yt-dlp packaged as zip (preferred) or rar (backwards compatibility)
+          if [ -f macyt.zip ]; then
+            mkdir -p macyt
+            unzip -o macyt.zip -d macyt
+            rm -f macyt.zip
+          elif [ -f macyt.rar ]; then
             # Use unrar for macOS because p7zip may not support some RAR5 methods
             brew install unrar || true
             unrar x -o+ macyt.rar
@@ -185,7 +206,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Read version
         id: ver
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+        run: echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
       - name: Ensure tag uses v prefix
         run: |
           TAG="v${{ steps.ver.outputs.version }}"
