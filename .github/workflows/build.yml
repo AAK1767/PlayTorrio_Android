@@ -115,8 +115,9 @@ jobs:
       - name: Extract yt-dlp binary for macOS
         run: |
           if [ -f macyt.rar ]; then
-            brew install p7zip || true
-            7z x macyt.rar -y
+            # Use unrar for macOS because p7zip may not support some RAR5 methods
+            brew install unrar || true
+            unrar x -o+ macyt.rar
             rm -f macyt.rar
           fi
       - name: Check for yt-dlp binary on macOS x64
@@ -155,8 +156,9 @@ jobs:
       - name: Extract yt-dlp binary for macOS
         run: |
           if [ -f macyt.rar ]; then
-            brew install p7zip || true
-            7z x macyt.rar -y
+            # Use unrar for macOS because p7zip may not support some RAR5 methods
+            brew install unrar || true
+            unrar x -o+ macyt.rar
             rm -f macyt.rar
           fi
       - name: Check for yt-dlp binary on macOS arm64
