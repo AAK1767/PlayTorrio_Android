@@ -2002,10 +2002,136 @@ app.get('/api/xdmovies/:tmdbid', async (req, res) => {
 });
 
 // ============================================================================
+// ACERMOVIES SERVICE
+// ============================================================================
+
+// Simple helper: safe JSON fetch with good error output
+async function acermovies_postJson(url, payload) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "accept": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!res.ok) {
+    const err = new Error(`Upstream ${res.status} ${res.statusText}`);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+
+  return data;
+}
+
+// --- API: SEARCH ---
+// /api/acermovies/search/:query
+app.get('/api/acermovies/search/:query', async (req, res) => {
+  try {
+    const query = decodeURIComponent(req.params.query || "").trim();
+    if (!query) return res.status(400).json({ error: "Missing search query" });
+
+    const data = await acermovies_postJson("https://acermovies.val.run/api/search", {
+      searchQuery: query
+    });
+
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({
+      error: "Search failed",
+      message: e.message,
+      upstreamStatus: e.status || null,
+      upstreamData: e.data || null
+    });
+  }
+});
+
+// --- API: SOURCE QUALITY ---
+// /api/acermovies/sourceQuality?url=...
+app.get('/api/acermovies/sourceQuality', async (req, res) => {
+  try {
+    const url = (req.query.url || "").trim();
+    if (!url) return res.status(400).json({ error: "Missing url" });
+
+    const data = await acermovies_postJson("https://acermovies.val.run/api/sourceQuality", {
+      url
+    });
+
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({
+      error: "SourceQuality failed",
+      message: e.message,
+      upstreamStatus: e.status || null,
+      upstreamData: e.data || null
+    });
+  }
+});
+
+// --- API: SOURCE EPISODES ---
+// /api/acermovies/sourceEpisodes?url=...
+app.get('/api/acermovies/sourceEpisodes', async (req, res) => {
+  try {
+    const url = (req.query.url || "").trim();
+    if (!url) return res.status(400).json({ error: "Missing url" });
+
+    const data = await acermovies_postJson("https://acermovies.val.run/api/sourceEpisodes", {
+      url
+    });
+
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({
+      error: "SourceEpisodes failed",
+      message: e.message,
+      upstreamStatus: e.status || null,
+      upstreamData: e.data || null
+    });
+  }
+});
+
+// --- API: SOURCE URL ---
+// /api/acermovies/sourceUrl?url=...&seriesType=movie
+app.get('/api/acermovies/sourceUrl', async (req, res) => {
+  try {
+    const url = (req.query.url || "").trim();
+    const seriesType = (req.query.seriesType || "movie").trim();
+
+    if (!url) return res.status(400).json({ error: "Missing url" });
+
+    const data = await acermovies_postJson("https://acermovies.val.run/api/sourceUrl", {
+      url,
+      seriesType
+    });
+
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({
+      error: "SourceUrl failed",
+      message: e.message,
+      upstreamStatus: e.status || null,
+      upstreamData: e.data || null
+    });
+  }
+});
+
+
+// ============================================================================
 // Z-LIBRARY SERVICE (from z-lib.js)
 // ============================================================================
 
 const ZLIB_DOMAINS = [
+    'z-library.mn',
     'z-lib.gd',
     'z-lib.io',
     'zlibrary-global.se',

@@ -7714,6 +7714,43 @@
             color: #fff;
             font-weight: 600;
         }
+
+        /* Reader Fullscreen Mode */
+        body.reader-fullscreen-mode .custom-title-bar,
+        body.reader-fullscreen-mode header,
+        body.reader-fullscreen-mode .app-sidebar,
+        body.reader-fullscreen-mode .sidebar-toggle-btn {
+            display: none !important;
+        }
+        
+        body.reader-fullscreen-mode.ui-new:not(.platform-darwin) {
+            padding-top: 0 !important;
+        }
+        
+        body.reader-fullscreen-mode .app-main {
+            margin: 0 !important;
+            height: 100vh !important;
+            width: 100vw !important;
+        }
+        
+        body.reader-fullscreen-mode main {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: none !important;
+        }
+
+        /* Comics specific fullscreen overrides */
+        body.reader-fullscreen-mode #comics-page .page-header-enhanced,
+        body.reader-fullscreen-mode #comics-filter-container,
+        body.reader-fullscreen-mode #comics-back-btn,
+        body.reader-fullscreen-mode #comics-browse-btn {
+            display: none !important;
+        }
+        
+        body.reader-fullscreen-mode #comics-search-container {
+            margin-top: 1rem !important;
+            margin-bottom: 1rem !important;
+        }
     </style>
     <!-- Google Cast SDK -->
     <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
@@ -8230,13 +8267,13 @@
             <div class="nav-item" data-page="manga">
                 <i class="fas fa-book-reader" style="color: #ec4899;"></i>
                 <span>Manga</span>
-                <span class="nav-badge" style="background: linear-gradient(135deg, #ec4899, #db2777);">WeebCentral</span>
+                <span class="nav-badge" style="background: linear-gradient(135deg, #ec4899, #db2777);">Otaku</span>
             </div>
             <div class="nav-item" data-page="music">
                 <i class="fas fa-music" style="color: #ec4899;"></i>
                 <span>Music</span>
                 <!-- Updated badge to reflect new music provider -->
-                <span class="nav-badge" style="background: linear-gradient(135deg, #ec4899, #db2777);">Music</span>
+                <span class="nav-badge" style="background: linear-gradient(135deg, #ec4899, #db2777);">Unlimited</span>
             </div>
             <div class="nav-item" data-page="games-downloader">
                 <i class="fas fa-download" style="color: #8b5cf6;"></i>
@@ -10265,6 +10302,21 @@
                 <div style="color: white; margin-bottom: 15px; text-align: center;">
                     <div id="audiobooksPlayerTitle" style="font-size: 18px; font-weight: 600; margin-bottom: 5px;">No Audio Selected</div>
                     <div id="audiobooksPlayerChapter" style="font-size: 14px; opacity: 0.9;"></div>
+                    <div style="margin-top: 8px;">
+                        <select id="audiobooksPlaybackSpeed" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 12px; padding: 2px 8px; font-size: 12px; cursor: pointer; outline: none;">
+                            <option value="0.5" style="background: #7c3aed;">0.5x</option>
+                            <option value="0.75" style="background: #7c3aed;">0.75x</option>
+                            <option value="1" selected style="background: #7c3aed;">1x (Normal)</option>
+                            <option value="1.25" style="background: #7c3aed;">1.25x</option>
+                            <option value="1.5" style="background: #7c3aed;">1.5x</option>
+                            <option value="1.75" style="background: #7c3aed;">1.75x</option>
+                            <option value="2" style="background: #7c3aed;">2x</option>
+                            <option value="2.25" style="background: #7c3aed;">2.25x</option>
+                            <option value="2.5" style="background: #7c3aed;">2.5x</option>
+                            <option value="2.75" style="background: #7c3aed;">2.75x</option>
+                            <option value="3" style="background: #7c3aed;">3x</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
@@ -10439,18 +10491,27 @@
             <p class="page-subtitle">Read comics from ReadComicOnline (.ru)</p>
         </div>
 
-        <!-- HOME BUTTON -->
-        <button id="comics-home-btn" 
-            style="padding: 10px 25px; font-size: 15px; font-weight: bold;
-                   background: rgba(249,115,22,0.25); color:#f97316;
-                   border: 2px solid #f97316; border-radius: 10px; cursor:pointer;
-                   transition:0.2s;">
-            <i class="fas fa-home"></i> Home
-        </button>
+        <!-- ACTION BUTTONS -->
+        <div style="display:flex; gap:10px;">
+            <button id="comics-saved-btn" 
+                style="padding: 10px 25px; font-size: 15px; font-weight: bold;
+                       background: rgba(249,115,22,0.25); color:#f97316;
+                       border: 2px solid #f97316; border-radius: 10px; cursor:pointer;
+                       transition:0.2s;">
+                <i class="fas fa-heart"></i> Saved
+            </button>
+            <button id="comics-home-btn" 
+                style="padding: 10px 25px; font-size: 15px; font-weight: bold;
+                       background: rgba(249,115,22,0.25); color:#f97316;
+                       border: 2px solid #f97316; border-radius: 10px; cursor:pointer;
+                       transition:0.2s;">
+                <i class="fas fa-home"></i> Home
+            </button>
+        </div>
     </div>
 
     <!-- SEARCH + GENRES -->
-    <div style="max-width: 1000px; margin: 1.5rem auto 2rem; display:flex; flex-wrap:wrap; gap:15px; justify-content:center;">
+    <div id="comics-filter-container" style="max-width: 1000px; margin: 1.5rem auto 2rem; display:flex; flex-wrap:wrap; gap:15px; justify-content:center;">
 
         <!-- Search -->
         <div style="flex:1; min-width:260px; position:relative;">
@@ -10502,6 +10563,16 @@
                        border:2px solid rgba(249,115,22,0.5);
                        display:none; transition:0.2s;">
             ← Back
+        </button>
+        
+        <button id="comics-zoom-out-btn" style="display:none; padding:12px 15px; font-size:16px; border:none; border-radius:10px; cursor:pointer; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); transition:0.2s;">
+            <i class="fas fa-search-minus"></i>
+        </button>
+        <button id="comics-zoom-in-btn" style="display:none; padding:12px 15px; font-size:16px; border:none; border-radius:10px; cursor:pointer; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); transition:0.2s;">
+            <i class="fas fa-search-plus"></i>
+        </button>
+        <button id="comics-fullscreen-btn" style="display:none; padding:12px 15px; font-size:16px; border:none; border-radius:10px; cursor:pointer; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); transition:0.2s;">
+            <i class="fas fa-expand"></i>
         </button>
     </div>
 
@@ -10558,6 +10629,7 @@
                 <div id="manga-source-buttons" style="display: flex; gap: 1rem;">
                     <button id="weebcentral-btn" class="provider-btn active">WeebCentral</button>
                     <button id="comix-btn" class="provider-btn">Comix</button>
+                    <button id="manga-saved-btn" class="provider-btn"><i class="fas fa-heart"></i> Saved</button>
                 </div>
             </div>
             <p id="manga-source-subtitle" class="page-subtitle">Read manga from WeebCentral</p>
@@ -10589,10 +10661,21 @@
 
     <!-- Manga Reader Page -->
     <div id="manga-reader-page" style="display: none; background: #000; min-height: 100vh; position: relative;">
-        <!-- Floating Back Button -->
-        <button id="mangaReaderBack" style="position: sticky; top: 1rem; left: 1rem; z-index: 1000; background: var(--secondary); border: none; padding: 0.75rem 1.5rem; border-radius: 8px; color: white; font-size: 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.5); width: fit-content; margin-bottom: 1rem;">
-            <i class="fas fa-arrow-left"></i> Back
-        </button>
+        <!-- Floating Controls -->
+        <div style="position: sticky; top: 1rem; left: 1rem; z-index: 1000; display: flex; gap: 10px; width: fit-content; margin-bottom: 1rem;">
+            <button id="mangaReaderBack" style="background: var(--secondary); border: none; padding: 0.75rem 1.5rem; border-radius: 8px; color: white; font-size: 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            <button id="mangaZoomOut" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 0.75rem 1rem; border-radius: 8px; color: white; cursor: pointer; backdrop-filter: blur(5px); transition: background 0.2s;">
+                <i class="fas fa-search-minus"></i>
+            </button>
+            <button id="mangaZoomIn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 0.75rem 1rem; border-radius: 8px; color: white; cursor: pointer; backdrop-filter: blur(5px); transition: background 0.2s;">
+                <i class="fas fa-search-plus"></i>
+            </button>
+            <button id="mangaFullscreenBtn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 0.75rem 1rem; border-radius: 8px; color: white; cursor: pointer; backdrop-filter: blur(5px); transition: background 0.2s;">
+                <i class="fas fa-expand"></i>
+            </button>
+        </div>
         
         <!-- Keyboard Navigation Hint -->
         <div style="position: fixed; right: 1.5rem; top: 50%; transform: translateY(-50%); z-index: 900; background: rgba(0,0,0,0.7); padding: 1rem; border-radius: 8px; color: white; font-size: 0.9rem; text-align: center; backdrop-filter: blur(10px); box-shadow: 0 4px 12px rgba(0,0,0,0.5); max-width: 120px;">
@@ -10663,14 +10746,25 @@
         <div class="trakt-container">
             <div class="trakt-card">
                 <div class="trakt-card-body">
-                    <div class="downloader-search">
-                        <input id="downloaderQuery" type="text" placeholder="Search movies or shows (e.g., Superman)" />
-                        <button id="downloaderSearchBtn"><i class="fas fa-search"></i></button>
-                        <div class="downloader-type-toggle">
-                            <button id="downloaderFilterMovies" class="filter-btn active">Movies</button>
-                            <button id="downloaderFilterTV" class="filter-btn">TV Shows</button>
+                    <div class="downloader-type-toggle" style="justify-content: center; margin-left: 0; margin-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 1rem; width: 100%;">
+                        <button id="provider111477" class="filter-btn active">111477</button>
+                        <button id="providerAcermovies" class="filter-btn">acermovies</button>
+                    </div>
+
+                    <div id="111477-content">
+                        <div class="downloader-search">
+                            <input id="downloaderQuery" type="text" placeholder="Search movies or shows (e.g., Superman)" />
+                            <button id="downloaderSearchBtn"><i class="fas fa-search"></i></button>
+                            <div class="downloader-type-toggle">
+                                <button id="downloaderFilterMovies" class="filter-btn active">Movies</button>
+                                <button id="downloaderFilterTV" class="filter-btn">TV Shows</button>
+                            </div>
                         </div>
                     </div>
+                    <div id="acermovies-content" style="display: none;">
+                        <!-- acermovies content will be loaded here -->
+                    </div>
+
                     <div id="downloaderResults" class="downloader-results"></div>
                     <div id="downloaderEmpty" class="downloader-empty" style="display:none;">Type a search above to see results.</div>
                 </div>
@@ -19155,8 +19249,13 @@ Your browser does not support the video tag.
                 }
                 albums.forEach(a => {
                     // Normalize album data for display. API returns { id, name, artists, albumArt, releaseDate, totalTracks }
-                    const artistName = a.artists || 'Unknown Artist';
-                    const coverUrl = a.albumArt || '';
+                    let artistName = 'Unknown Artist';
+                    if (typeof a.artists === 'string') artistName = a.artists;
+                    else if (Array.isArray(a.artists) && a.artists.length > 0) artistName = (typeof a.artists[0] === 'string' ? a.artists[0] : a.artists[0].name);
+                    else if (a.artist && typeof a.artist === 'string') artistName = a.artist;
+                    else if (a.artist && a.artist.name) artistName = a.artist.name;
+
+                    const coverUrl = a.albumArt || a.cover || '';
                     const title = a.name || a.title || 'Unknown Album';
                     const totalTracks = a.totalTracks || a.numberOfTracks || 0;
                     const releaseDate = a.releaseDate || '';
@@ -19178,7 +19277,7 @@ Your browser does not support the video tag.
                             </div>
                         </div>`;
                     // Attach album object with normalized fields for open/save operations
-                    const normalizedAlbum = { id: a.id, name: title, artists: artistName, albumArt: coverUrl, totalTracks: totalTracks, releaseDate: releaseDate };
+                    const normalizedAlbum = { id: a.id, title: title, name: title, artists: artistName, artist: artistName, albumArt: coverUrl, cover: coverUrl, totalTracks: totalTracks, releaseDate: releaseDate };
                     card.querySelector('.album-open-btn').addEventListener('click', () => openAlbum(normalizedAlbum));
                     card.querySelector('.album-heart-btn').addEventListener('click', () => saveAlbum(normalizedAlbum, card.querySelector('.album-heart-btn')));
                     albumsGrid.appendChild(card);
@@ -19410,12 +19509,26 @@ Your browser does not support the video tag.
                     if (btnEl) btnEl.classList.add('added');
                     return;
                 }
+                
+                // Handle various property names from different sources
+                const title = album.title || album.name || 'Unknown Album';
+                const cover = album.cover || album.albumArt || null;
+                
+                let artist = 'Unknown Artist';
+                if (typeof album.artist === 'string') artist = album.artist;
+                else if (typeof album.artists === 'string') artist = album.artists;
+                else if (album.artist?.name) artist = album.artist.name;
+                else if (Array.isArray(album.artists) && album.artists.length > 0) {
+                    if (typeof album.artists[0] === 'string') artist = album.artists[0];
+                    else artist = album.artists[0].name;
+                }
+
                 const toSave = {
                     id: album.id,
-                    title: album.title,
-                    cover: album.cover || null,
-                    artist: (album.artist?.name) || (album.artists && album.artists[0]?.name) || 'Unknown Artist',
-                    numberOfTracks: album.numberOfTracks || 0,
+                    title: title,
+                    cover: cover,
+                    artist: artist,
+                    numberOfTracks: album.numberOfTracks || album.totalTracks || 0,
                     releaseDate: album.releaseDate || ''
                 };
                 list.push(toSave);
@@ -20314,11 +20427,74 @@ Your browser does not support the video tag.
                 }
             }
 
+            // Helper to process imported playlist data
+            function processPlaylistImport(importData) {
+                // Validate data
+                if (!importData.name || !Array.isArray(importData.tracks)) {
+                    showNotification('Invalid playlist data', 'error');
+                    return;
+                }
+
+                // Check if playlist with same name exists
+                const playlists = getPlaylists();
+                let playlistName = importData.name;
+                let counter = 1;
+                
+                while (playlists.find(p => p.name.toLowerCase() === playlistName.toLowerCase())) {
+                    playlistName = `${importData.name} (${counter})`;
+                    counter++;
+                }
+
+                // Create new playlist
+                const newPlaylist = {
+                    id: 'pl_' + Math.random().toString(36).slice(2, 10),
+                    name: playlistName,
+                    tracks: importData.tracks
+                };
+
+                playlists.push(newPlaylist);
+                setPlaylists(playlists);
+                renderPlaylists();
+
+                showNotification(`Playlist "${playlistName}" imported with ${importData.tracks.length} track${importData.tracks.length !== 1 ? 's' : ''}`, 'success');
+            }
+
             // Import playlist from JSON file
             async function importPlaylist() {
                 try {
                     if (!window.electronAPI?.showOpenDialog) {
-                        showNotification('Import not supported in this environment', 'error');
+                        // Fallback for web/missing API: use input type=file
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.json';
+                        input.style.display = 'none';
+                        document.body.appendChild(input);
+                        
+                        input.onchange = (e) => {
+                            const file = e.target.files[0];
+                            if (!file) {
+                                document.body.removeChild(input);
+                                return;
+                            }
+                            
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                try {
+                                    const importData = JSON.parse(event.target.result);
+                                    processPlaylistImport(importData);
+                                } catch (err) {
+                                    showNotification('Invalid playlist file format', 'error');
+                                }
+                                document.body.removeChild(input);
+                            };
+                            reader.onerror = () => {
+                                showNotification('Failed to read file', 'error');
+                                document.body.removeChild(input);
+                            };
+                            reader.readAsText(file);
+                        };
+                        
+                        input.click();
                         return;
                     }
 
@@ -20352,34 +20528,7 @@ Your browser does not support the video tag.
                         return;
                     }
 
-                    // Validate data
-                    if (!importData.name || !Array.isArray(importData.tracks)) {
-                        showNotification('Invalid playlist data', 'error');
-                        return;
-                    }
-
-                    // Check if playlist with same name exists
-                    const playlists = getPlaylists();
-                    let playlistName = importData.name;
-                    let counter = 1;
-                    
-                    while (playlists.find(p => p.name.toLowerCase() === playlistName.toLowerCase())) {
-                        playlistName = `${importData.name} (${counter})`;
-                        counter++;
-                    }
-
-                    // Create new playlist
-                    const newPlaylist = {
-                        id: 'pl_' + Math.random().toString(36).slice(2, 10),
-                        name: playlistName,
-                        tracks: importData.tracks
-                    };
-
-                    playlists.push(newPlaylist);
-                    setPlaylists(playlists);
-                    renderPlaylists();
-
-                    showNotification(`Playlist "${playlistName}" imported with ${importData.tracks.length} track${importData.tracks.length !== 1 ? 's' : ''}`, 'success');
+                    processPlaylistImport(importData);
                 } catch (error) {
                     console.error('Import error:', error);
                     showNotification('Failed to import playlist', 'error');
@@ -22610,10 +22759,291 @@ Your browser does not support the video tag.
                 });
             }
 
+            // [START] AcerMovies Integration
+            const provider111477 = document.getElementById('provider111477');
+            const providerAcermovies = document.getElementById('providerAcermovies');
+            const downloaderTypeToggle = document.querySelector('.downloader-type-toggle');
+            
+            function setActiveDownloaderProvider(provider) {
+                provider111477.classList.remove('active');
+                providerAcermovies.classList.remove('active');
+                const queryInput = document.getElementById('downloaderQuery');
+                const resultsContainer = document.getElementById('downloaderResults');
+                const emptyContainer = document.getElementById('downloaderEmpty');
+                const moviesFilterBtn = document.getElementById('downloaderFilterMovies');
+                const tvFilterBtn = document.getElementById('downloaderFilterTV');
+
+                if(resultsContainer) resultsContainer.innerHTML = '';
+                if(resultsContainer) resultsContainer.classList.remove('single');
+                if(emptyContainer) emptyContainer.style.display = 'none';
+
+                if (provider === 'acermovies') {
+                    providerAcermovies.classList.add('active');
+                    if (moviesFilterBtn) moviesFilterBtn.style.display = 'none';
+                    if (tvFilterBtn) tvFilterBtn.style.display = 'none';
+                    if (queryInput) queryInput.placeholder = 'Search acermovies...';
+                } else { // Default to 111477
+                    provider111477.classList.add('active');
+                    if (moviesFilterBtn) moviesFilterBtn.style.display = 'flex';
+                    if (tvFilterBtn) tvFilterBtn.style.display = 'flex';
+                    if (queryInput) queryInput.placeholder = 'Search movies or shows (e.g., Superman)';
+                }
+            }
+
+            if (provider111477 && providerAcermovies) {
+                provider111477.addEventListener('click', () => setActiveDownloaderProvider('111477'));
+                providerAcermovies.addEventListener('click', () => setActiveDownloaderProvider('acermovies'));
+                setActiveDownloaderProvider('111477'); // Initial state
+            }
+            
+            async function searchAcerMovies(query) {
+                const downloaderResults = document.getElementById('downloaderResults');
+                const downloaderEmpty = document.getElementById('downloaderEmpty');
+                if (!downloaderResults || !downloaderEmpty || !query.trim()) {
+                    if (downloaderResults) downloaderResults.innerHTML = '';
+                    if (downloaderEmpty) downloaderEmpty.style.display = 'block';
+                    if (downloaderEmpty) downloaderEmpty.textContent = 'Please enter a search term.';
+                    return;
+                };
+
+                downloaderResults.innerHTML = '';
+                downloaderResults.classList.remove('single');
+                downloaderEmpty.style.display = 'none';
+
+                try {
+                    const res = await fetch(`/api/acermovies/search/${encodeURIComponent(query)}`);
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    const data = await res.json();
+                    const results = (data && data.searchResult) ? data.searchResult : [];
+
+                    if (results.length === 0) {
+                        downloaderEmpty.style.display = 'block';
+                        downloaderEmpty.textContent = 'No results found on acermovies.';
+                        return;
+                    }
+
+                    const frag = document.createDocumentFragment();
+                    results.slice(0, 20).forEach((item) => {
+                        const card = document.createElement('div');
+                        card.className = 'downloader-item';
+                        card.tabIndex = 0;
+                        card.dataset.url = item.url;
+
+                        card.innerHTML = `
+                            <img loading="lazy" class="downloader-thumb" src="${item.image || ''}" alt="${(item.title || '').replace(/"/g,'&quot;')}" onerror="this.style.opacity=0;" />
+                            <div class="downloader-meta">
+                                <div class="downloader-title">${item.title || 'Untitled'}</div>
+                            </div>`;
+
+                        card.addEventListener('click', (e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            downloaderResults.querySelectorAll('.downloader-item').forEach(el => { if (el !== card) el.remove(); });
+                            downloaderResults.classList.add('single');
+                            document.querySelectorAll('.downloader-item.selected').forEach(el => el.classList.remove('selected'));
+                            card.classList.add('selected');
+                            getAcerMovieQualities(card.dataset.url, downloaderResults);
+                        });
+                        frag.appendChild(card);
+                    });
+                    downloaderResults.appendChild(frag);
+
+                } catch (err) {
+                    console.error('acermovies search failed:', err);
+                    downloaderEmpty.style.display = 'block';
+                    downloaderEmpty.textContent = 'acermovies search failed.';
+                }
+            }
+
+            async function getAcerMovieQualities(movieUrl, container) {
+                let currentSeriesType = "movie";
+
+                try {
+                    const res = await fetch(`/api/acermovies/sourceQuality?url=${encodeURIComponent(movieUrl)}`);
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    const data = await res.json();
+                    const qualities = (data && data.sourceQualityList) ? data.sourceQualityList : [];
+                    const meta = data.meta || {};
+                    currentSeriesType = meta.type || "movie";
+                    
+                    renderAcerFilesCard(qualities, container, currentSeriesType);
+                } catch (e) {
+                    console.error('Failed to load acermovies qualities', e);
+                    if(typeof showNotification === 'function') showNotification('Failed to load qualities for this title', 'error');
+                }
+            }
+
+            function renderAcerFilesCard(qualities, container, seriesType) {
+                const filesWrap = document.createElement('div');
+                filesWrap.className = 'trakt-card downloader-files-card';
+                filesWrap.style.maxWidth = '900px';
+                filesWrap.style.width = '100%';
+                const inner = document.createElement('div');
+                inner.className = 'trakt-card-body';
+                inner.innerHTML = `<h3 style="margin-bottom:0.75rem;">Available Qualities (${qualities.length})</h3>`;
+
+                if (!qualities.length) {
+                    inner.innerHTML += '<div class="downloader-empty" style="display:block;">No qualities found for this title.</div>';
+                } else {
+                    const list = document.createElement('div');
+                    list.style.display = 'flex';
+                    list.style.flexDirection = 'column';
+                    list.style.gap = '0.5rem';
+
+                    qualities.forEach(qItem => {
+                        // Fix for episodes having .link instead of .url
+                        if (qItem.link && !qItem.url) qItem.url = qItem.link;
+
+                        const row = document.createElement('div');
+                        row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:0.6rem 0.8rem;';
+                        
+                        const name = document.createElement('div');
+                        name.style.cssText = 'flex:1; margin-right:0.75rem; white-space:normal; word-break:break-word;';
+                        name.textContent = qItem.title || 'Unknown Quality';
+
+                        const btnContainer = document.createElement('div');
+                        btnContainer.style.display = "flex";
+                        btnContainer.style.gap = "8px";
+                        btnContainer.style.flexWrap = "wrap";
+
+                        const hasBatch = qItem.batchUrl && qItem.batchUrl.trim() !== "";
+                        const hasEpisodes = qItem.episodesUrl && qItem.episodesUrl.trim() !== "";
+                        const hasDirectUrl = qItem.url && qItem.url.trim() !== "";
+
+                        if (seriesType === "movie" || seriesType === "episode" || hasDirectUrl) {
+                            const pick = document.createElement("button");
+                            pick.textContent = "Select";
+                            pick.className = 'api-btn api-btn-primary';
+                            pick.addEventListener("click", async (ev) => {
+                                ev.stopPropagation();
+                                pick.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                                pick.disabled = true;
+                                await handleQualitySelect(qItem, pick, "direct", container, seriesType === 'episode' ? 'episode' : 'movie');
+                            });
+                            btnContainer.appendChild(pick);
+                        } else {
+                            if (hasBatch) {
+                                const batchBtn = document.createElement("button");
+                                batchBtn.textContent = "Season Pack";
+                                batchBtn.className = 'api-btn api-btn-primary';
+                                batchBtn.addEventListener("click", async (ev) => {
+                                    ev.stopPropagation();
+                                        batchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                                    batchBtn.disabled = true;
+                                    await handleQualitySelect(qItem, batchBtn, "batch", container);
+                                });
+                                btnContainer.appendChild(batchBtn);
+                            }
+
+                            if (hasEpisodes) {
+                                const episodesBtn = document.createElement("button");
+                                episodesBtn.textContent = "Individual Episodes";
+                                episodesBtn.className = 'api-btn api-btn-primary';
+                                episodesBtn.addEventListener("click", async (ev) => {
+                                    ev.stopPropagation();
+                                        episodesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                                    episodesBtn.disabled = true;
+                                    await handleQualitySelect(qItem, episodesBtn, "episodes", container);
+                                });
+                                btnContainer.appendChild(episodesBtn);
+                            }
+                        }
+
+                        row.appendChild(name);
+                        row.appendChild(btnContainer);
+                        list.appendChild(row);
+                    });
+                    inner.appendChild(list);
+                }
+                filesWrap.appendChild(inner);
+                container.querySelectorAll('.downloader-files-card').forEach(el => el.remove());
+                container.appendChild(filesWrap);
+            }
+
+            async function handleQualitySelect(qItem, buttonEl, selectType, container, itemType) {
+                if (selectType === "direct" || qItem.url) {
+                    await resolveFinal(qItem.url, itemType || "movie", buttonEl);
+                } else if (selectType === "batch" && qItem.batchUrl) {
+                    await resolveFinal(qItem.batchUrl, "batch", buttonEl);
+                } else if (selectType === "episodes" && qItem.episodesUrl) {
+                    await showEpisodes(qItem, container);
+                } else {
+                    buttonEl.innerHTML = "Select";
+                    buttonEl.disabled = false;
+                    alert("No download URL found.");
+                }
+            }
+
+            async function showEpisodes(qItem, container) {
+                try {
+                    const res = await fetch(`/api/acermovies/sourceEpisodes?url=${encodeURIComponent(qItem.episodesUrl)}`);
+                    const data = await res.json();
+                    const episodes = (data && data.sourceEpisodes) ? data.sourceEpisodes : [];
+                    
+                    if (!episodes.length) {
+                        alert("No episodes found.");
+                        return;
+                    }
+                    
+                    renderAcerFilesCard(episodes, container, "episode");
+
+                } catch (e) {
+                    console.error(e);
+                    alert("Failed to load episodes.");
+                }
+            }
+
+            async function resolveFinal(url, seriesType, buttonEl) {
+                try {
+                    const res = await fetch(`/api/acermovies/sourceUrl?url=${encodeURIComponent(url)}&seriesType=${seriesType}`);
+                    const data = await res.json();
+                    const finalUrl = data && data.sourceUrl ? data.sourceUrl : "";
+
+                    if (!finalUrl) {
+                        buttonEl.innerHTML = "Select";
+                        buttonEl.disabled = false;
+                        alert("No final link returned.");
+                        return;
+                    }
+                    
+                    buttonEl.innerHTML = "Download";
+                    buttonEl.disabled = false;
+                    buttonEl.onclick = () => {
+                        if (window.electronAPI?.openExternal) {
+                            window.electronAPI.openExternal(finalUrl);
+                        } else {
+                            window.open(finalUrl, "_blank");
+                        }
+                    };
+
+                } catch (e) {
+                    console.error(e);
+                    buttonEl.innerHTML = "Select";
+                    buttonEl.disabled = false;
+                    alert("Failed to resolve final link.");
+                }
+            }
+            // [END] AcerMovies Integration
+
             if (downloaderBtn && downloaderQuery) {
-                downloaderBtn.addEventListener('click', () => runDownloaderSearch(downloaderQuery.value));
+                // Clone the button to remove any old listeners that might exist.
+                const newDownloaderBtn = downloaderBtn.cloneNode(true);
+                downloaderBtn.parentNode.replaceChild(newDownloaderBtn, downloaderBtn);
+
+                const searchHandler = () => {
+                    const acermoviesProviderActive = providerAcermovies?.classList.contains('active');
+                    if (acermoviesProviderActive) {
+                        searchAcerMovies(downloaderQuery.value);
+                    } else {
+                        runDownloaderSearch(downloaderQuery.value);
+                    }
+                };
+
+                newDownloaderBtn.addEventListener('click', searchHandler);
                 downloaderQuery.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') runDownloaderSearch(downloaderQuery.value);
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // Prevent form submission if it's in a form
+                        searchHandler();
+                    }
                 });
             }
             
@@ -28114,6 +28544,7 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
             const volumeBtn = document.getElementById('audiobooksVolumeBtn');
             const volumeSlider = document.getElementById('audiobooksVolumeSlider');
             const audioEl = document.getElementById('audiobooksAudioElement');
+            const playbackSpeed = document.getElementById('audiobooksPlaybackSpeed');
 
             if (!searchInput || !searchBtn || !clearBtn) return;
 
@@ -28242,6 +28673,13 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                         volumeSlider.value = 100;
                         volumeBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
                     }
+                });
+            }
+
+            // Playback speed
+            if (playbackSpeed && audioEl) {
+                playbackSpeed.addEventListener('change', (e) => {
+                    audioEl.playbackRate = parseFloat(e.target.value);
                 });
             }
 
@@ -29553,6 +29991,51 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
         // ---- Manga functionality ----
         let mangaList = [];
         let currentManga = null;
+
+        function toggleReaderFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(e => {
+                    console.error(`Error attempting to enable full-screen mode: ${e.message} (${e.name})`);
+                });
+                document.body.classList.add('reader-fullscreen-mode');
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+                document.body.classList.remove('reader-fullscreen-mode');
+            }
+        }
+        
+        // Manga Storage Helpers
+        const SAVED_MANGA_KEY = 'pt_saved_manga_v1';
+        function getSavedManga() {
+            try { return JSON.parse(localStorage.getItem(SAVED_MANGA_KEY) || '[]'); } catch { return []; }
+        }
+        function setSavedManga(list) {
+            localStorage.setItem(SAVED_MANGA_KEY, JSON.stringify(list));
+        }
+        function isMangaSaved(uniqueId) {
+            return getSavedManga().some(m => String(m.uniqueId) === String(uniqueId));
+        }
+        function toggleSaveManga(event, manga) {
+            event.stopPropagation();
+            const list = getSavedManga();
+            const idx = list.findIndex(m => String(m.uniqueId) === String(manga.uniqueId));
+            const btn = event.currentTarget;
+            if (idx >= 0) {
+                list.splice(idx, 1);
+                btn.classList.remove('in-list');
+                btn.innerHTML = '<i class="fas fa-plus"></i>';
+                showNotification('Removed from Saved Manga', 'info');
+            } else {
+                list.unshift(manga);
+                btn.classList.add('in-list');
+                btn.innerHTML = '<i class="fas fa-check"></i>';
+                showNotification('Added to Saved Manga', 'success');
+            }
+            setSavedManga(list);
+        }
+
         let mangaOffset = 1;
         let mangaIsLoading = false;
         let mangaHasMore = true;
@@ -29568,18 +30051,42 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
             const mangaDetailsClose = document.getElementById('mangaDetailsClose');
             const mangaReaderPage = document.getElementById('manga-reader-page');
             const mangaReaderBack = document.getElementById('mangaReaderBack');
+            const mangaFullscreenBtn = document.getElementById('mangaFullscreenBtn');
+            
+            // Manga Zoom Controls
+            const mangaZoomIn = document.getElementById('mangaZoomIn');
+            const mangaZoomOut = document.getElementById('mangaZoomOut');
+            const mangaReaderPages = document.getElementById('mangaReaderPages');
+            let currentMangaZoom = 1200; // Default max-width
+
+            mangaZoomIn.addEventListener('click', () => {
+                currentMangaZoom += 200;
+                mangaReaderPages.style.maxWidth = `${currentMangaZoom}px`;
+            });
+            mangaZoomOut.addEventListener('click', () => {
+                if (currentMangaZoom > 400) {
+                    currentMangaZoom -= 200;
+                    mangaReaderPages.style.maxWidth = `${currentMangaZoom}px`;
+                }
+            });
+
+            if (mangaFullscreenBtn) {
+                mangaFullscreenBtn.addEventListener('click', toggleReaderFullscreen);
+            }
 
             const weebcentralBtn = document.getElementById('weebcentral-btn');
             const comixBtn = document.getElementById('comix-btn');
             const mangaCategoriesContainer = document.getElementById('manga-categories-container');
             const mangaCategoriesDropdown = document.getElementById('manga-categories-dropdown');
             const mangaSourceSubtitle = document.getElementById('manga-source-subtitle');
+            const mangaSavedBtn = document.getElementById('manga-saved-btn');
             
             weebcentralBtn.addEventListener('click', () => {
                 if (mangaSource === 'weebcentral') return;
                 mangaSource = 'weebcentral';
                 weebcentralBtn.classList.add('active');
                 comixBtn.classList.remove('active');
+                if (mangaSavedBtn) mangaSavedBtn.classList.remove('active');
                 mangaCategoriesContainer.style.display = 'none';
                 mangaSourceSubtitle.textContent = 'Read manga from WeebCentral';
                 clearMangaGridAndSearch();
@@ -29591,12 +30098,27 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                 mangaSource = 'comix';
                 comixBtn.classList.add('active');
                 weebcentralBtn.classList.remove('active');
+                if (mangaSavedBtn) mangaSavedBtn.classList.remove('active');
                 mangaCategoriesContainer.style.display = 'block';
                 mangaSourceSubtitle.textContent = 'Read manga from Comix';
                 clearMangaGridAndSearch();
                 loadComixGenres();
                 loadTrendingManga();
             });
+
+            if (mangaSavedBtn) {
+                mangaSavedBtn.addEventListener('click', () => {
+                    if (mangaSource === 'saved') return;
+                    mangaSource = 'saved';
+                    mangaSavedBtn.classList.add('active');
+                    weebcentralBtn.classList.remove('active');
+                    comixBtn.classList.remove('active');
+                    mangaCategoriesContainer.style.display = 'none';
+                    mangaSourceSubtitle.textContent = 'Your Saved Manga';
+                    clearMangaGridAndSearch();
+                    loadSavedMangaView();
+                });
+            }
 
             mangaCategoriesDropdown.addEventListener('change', () => {
                 clearMangaGridAndSearch();
@@ -29712,6 +30234,15 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                 });
             }
             
+            function loadSavedMangaView() {
+                const saved = getSavedManga();
+                if (saved.length === 0) {
+                    mangaGrid.innerHTML = '<p style="text-align: center; color: var(--gray); grid-column: 1 / -1; padding: 2rem;">No saved manga yet.</p>';
+                    return;
+                }
+                displayManga(saved, false);
+            }
+
             async function loadTrendingManga(append = false) {
                 if (mangaIsLoading) return;
                 
@@ -29831,14 +30362,25 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                 }
                 
                 mangaArray.forEach(manga => {
+                    // Ensure provider is set on the object
+                    if (!manga.provider) manga.provider = mangaSource;
+                    // Ensure uniqueId is set
+                    if (!manga.uniqueId) {
+                        manga.uniqueId = manga.provider === 'comix' ? (manga.manga_id || manga.hash_id) : (manga.id || manga.seriesId);
+                    }
+
                     const title = manga.name || 'Unknown Title';
                     const coverUrl = manga.poster || '';
+                    const isSaved = isMangaSaved(manga.uniqueId);
                     
                     const card = document.createElement('div');
                     card.className = 'movie-card';
                     card.style.cursor = 'pointer';
                     
                     card.innerHTML = `
+                        <button class="add-to-list-btn ${isSaved ? 'in-list' : ''}" title="${isSaved ? 'Remove from Saved' : 'Save Manga'}">
+                            <i class="fas ${isSaved ? 'fa-check' : 'fa-plus'}"></i>
+                        </button>
                         <img src="${coverUrl || 'https://via.placeholder.com/256x384?text=No+Cover'}" alt="${title}" class="movie-poster" style="object-fit: cover;">
                         <div class="movie-info">
                             <h3 class="movie-title">${title}</h3>
@@ -29849,7 +30391,15 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                         </div>
                     `;
                     
-                    card.addEventListener('click', () => showMangaDetails(manga));
+                    const saveBtn = card.querySelector('.add-to-list-btn');
+                    saveBtn.addEventListener('click', (e) => {
+                        toggleSaveManga(e, manga);
+                    });
+
+                    card.addEventListener('click', (e) => {
+                        if (e.target.closest('.add-to-list-btn')) return;
+                        showMangaDetails(manga);
+                    });
                     mangaGrid.appendChild(card);
                 });
             }
@@ -29858,13 +30408,16 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                 currentManga = manga;
                 const title = manga.name || 'Unknown Title';
                 const description = manga.description || 'Tap to read';
-                const author = mangaSource === 'comix' ? 'Comix' : 'WeebCentral';
+                
+                // Use provider from manga object if available (for saved items), else global source
+                const provider = manga.provider || mangaSource;
+                const author = provider === 'comix' ? 'Comix' : 'WeebCentral';
                 const coverUrl = manga.poster || '';
                 
                 document.getElementById('mangaDetailsTitle').textContent = title;
                 document.getElementById('mangaDetailsAuthor').textContent = `Source: ${author}`;
 
-                if (mangaSource === 'comix') {
+                if (provider === 'comix') {
                     document.getElementById('mangaDetailsStatus').textContent = `Manga ID: ${manga.manga_id}`;
                 } else {
                     document.getElementById('mangaDetailsStatus').textContent = `Series ID: ${manga.seriesId}`;
@@ -29878,22 +30431,25 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                 tagsContainer.innerHTML = '';
                 
                 // Load chapters
-                if (mangaSource === 'comix') {
-                    await loadMangaChapters(manga.hash_id);
+                if (provider === 'comix') {
+                    await loadMangaChapters(manga.hash_id, null, 'comix');
                 } else {
-                    await loadMangaChapters(manga.seriesId, manga.latestChapterId);
+                    await loadMangaChapters(manga.seriesId || manga.id, manga.latestChapterId, 'weebcentral');
                 }
 
                 mangaDetailsModal.style.display = 'block';
             }
             
-            async function loadMangaChapters(id, latestChapterId) {
+            async function loadMangaChapters(id, latestChapterId, provider) {
                 const chaptersList = document.getElementById('mangaChaptersList');
                 chaptersList.innerHTML = '<p style="text-align: center; color: white; grid-column: 1 / -1;">Loading chapters...</p>';
                 
+                // Default to global if not passed
+                if (!provider) provider = mangaSource;
+                
                 try {
                     let url;
-                    if (mangaSource === 'comix') {
+                    if (provider === 'comix') {
                         url = `http://localhost:6987/api/comix/chapters/${id}`;
                     } else {
                         url = `http://localhost:6987/api/manga/chapters?seriesId=${encodeURIComponent(id)}&latestChapterId=${encodeURIComponent(latestChapterId || 'latest')}`;
@@ -29903,16 +30459,16 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                     
                     chaptersList.innerHTML = '';
                     let chapters = [];
-                    if (mangaSource === 'comix' && data.status === 'success') {
+                    if (provider === 'comix' && data.status === 'success') {
                         chapters = data.data;
-                    } else if (mangaSource === 'weebcentral' && data.success) {
+                    } else if (provider === 'weebcentral' && data.success) {
                         chapters = data.data;
                     }
 
                     if (chapters && chapters.length > 0) {
                         chapters.forEach(chapter => {
                             let chapterTitle, chapterId, seriesId;
-                            if (mangaSource === 'comix') {
+                            if (provider === 'comix') {
                                 chapterTitle = `Chapter ${chapter.number}` + (chapter.name ? `: ${chapter.name}` : '');
                                 chapterId = chapter.chapter_id;
                                 seriesId = id;
@@ -29941,7 +30497,7 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                             });
                             
                             chapterCard.addEventListener('click', async () => {
-                                readMangaChapter(seriesId, chapterId, chapterTitle);
+                                readMangaChapter(seriesId, chapterId, chapterTitle, provider);
                             });
                             
                             chaptersList.appendChild(chapterCard);
@@ -29955,7 +30511,7 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                 }
             }
             
-            async function readMangaChapter(id, chapterId, chapterTitle) {
+            async function readMangaChapter(id, chapterId, chapterTitle, provider) {
                 // Hide details modal and manga page
                 mangaDetailsModal.style.display = 'none';
                 document.getElementById('manga-page').style.display = 'none';
@@ -29966,9 +30522,11 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                 document.getElementById('mangaReaderPages').innerHTML = '';
                 document.getElementById('mangaReaderLoading').style.display = 'block';
                 
+                if (!provider) provider = mangaSource;
+
                 try {
                     let url;
-                    if (mangaSource === 'comix') {
+                    if (provider === 'comix') {
                         url = `http://localhost:6987/api/comix/manga/chapters/${id}/${chapterId}`;
                     } else {
                         url = `http://localhost:6987/api/chapter/pages?chapterId=${encodeURIComponent(chapterId)}`;
@@ -29981,9 +30539,9 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                     const pagesContainer = document.getElementById('mangaReaderPages');
 
                     let pages = [];
-                    if (mangaSource === 'comix' && data.status === 'success') {
+                    if (provider === 'comix' && data.status === 'success') {
                         pages = data.pages;
-                    } else if (mangaSource === 'weebcentral' && data.success) {
+                    } else if (provider === 'weebcentral' && data.success) {
                         pages = data.pages;
                     }
 
@@ -30020,8 +30578,39 @@ let comicsPageActive = false;
 
 let comicsCurrentView = "browse";   // "browse" | "issues" | "reader"
 let comicsCurrentComic = null;      // { slug, title? }
-let comicsMode = "home";            // "home" | "genre" | "search"
+let comicsMode = "home";            // "home" | "genre" | "search" | "saved"
 let comicsCurrentGenre = null;      // numeric genre id
+
+// Comics Storage Helpers
+const SAVED_COMICS_KEY = 'pt_saved_comics_v1';
+function getSavedComics() {
+    try { return JSON.parse(localStorage.getItem(SAVED_COMICS_KEY) || '[]'); } catch { return []; }
+}
+function setSavedComics(list) {
+    localStorage.setItem(SAVED_COMICS_KEY, JSON.stringify(list));
+}
+function isComicSaved(slug) {
+    return getSavedComics().some(c => c.slug === slug);
+}
+function toggleSaveComic(event, comic) {
+    event.stopPropagation();
+    const list = getSavedComics();
+    const idx = list.findIndex(c => c.slug === comic.slug);
+    const btn = event.currentTarget;
+    
+    if (idx >= 0) {
+        list.splice(idx, 1);
+        btn.classList.remove('in-list');
+        btn.innerHTML = '<i class="fas fa-plus"></i>';
+        showNotification('Removed from Saved Comics', 'info');
+    } else {
+        list.unshift(comic);
+        btn.classList.add('in-list');
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        showNotification('Added to Saved Comics', 'success');
+    }
+    setSavedComics(list);
+}
 
 // Genre map for dropdown
 const COMICS_GENRE_MAP = {
@@ -30118,15 +30707,23 @@ function showComicsView(view) {
     const loadMore  = document.getElementById("comics-load-more-container");
     const back      = document.getElementById("comics-back-btn");
     const loading   = document.getElementById("comics-loading");
+    const zoomIn    = document.getElementById("comics-zoom-in-btn");
+    const zoomOut   = document.getElementById("comics-zoom-out-btn");
+    const fullscreenBtn = document.getElementById("comics-fullscreen-btn");
 
     if (!grid || !issues || !reader || !loadMore || !back || !loading) return;
 
     grid.style.display     = view === "browse" ? "grid"  : "none";
     issues.style.display   = view === "issues" ? "block" : "none";
     reader.style.display   = view === "reader" ? "block" : "none";
-    loadMore.style.display = view === "browse" ? "block" : "none";
+    loadMore.style.display = (view === "browse" && comicsMode !== "saved") ? "block" : "none";
     back.style.display     = view !== "browse" ? "inline-block" : "none";
     loading.style.display  = view === "browse" ? "block" : "none";
+    
+    // Show zoom buttons only in reader view
+    if (zoomIn) zoomIn.style.display = view === "reader" ? "inline-block" : "none";
+    if (zoomOut) zoomOut.style.display = view === "reader" ? "inline-block" : "none";
+    if (fullscreenBtn) fullscreenBtn.style.display = view === "reader" ? "inline-block" : "none";
 }
 
 // ==============================
@@ -30256,6 +30853,7 @@ function addComicToGrid(item) {
 
     const slug   = item.url.split("/comic/")[1];
     const poster = `${API}/comics-proxy?url=${encodeURIComponent(item.poster_url)}`;
+    const isSaved = isComicSaved(slug);
 
     const div = document.createElement("div");
     div.className = "movie-card";
@@ -30270,6 +30868,9 @@ function addComicToGrid(item) {
     `;
 
     div.innerHTML = `
+        <button class="add-to-list-btn ${isSaved ? 'in-list' : ''}" title="${isSaved ? 'Remove from Saved' : 'Save Comic'}">
+            <i class="fas ${isSaved ? 'fa-check' : 'fa-plus'}"></i>
+        </button>
         <img src="${poster}" 
              alt="${item.name}"
              style="width:100%;height:300px;object-fit:cover;display:block;"
@@ -30290,7 +30891,16 @@ function addComicToGrid(item) {
         div.style.boxShadow   = "0 4px 12px rgba(0,0,0,0.3)";
     };
 
-    div.onclick = () => loadChapters(slug, item.name);
+    // Save button handler
+    const saveBtn = div.querySelector('.add-to-list-btn');
+    saveBtn.addEventListener('click', (e) => {
+        toggleSaveComic(e, { slug: slug, name: item.name, poster_url: item.poster_url, url: item.url });
+    });
+
+    div.addEventListener('click', (e) => {
+        if (e.target.closest('.add-to-list-btn')) return;
+        loadChapters(slug, item.name);
+    });
 
     container.appendChild(div);
 }
@@ -30442,6 +31052,7 @@ function handleComicsScroll() {
     if (!comicsPageActive) return;
     if (comicsCurrentView !== "browse") return;
     if (comicsIsSearchMode) return;
+    if (comicsMode === "saved") return;
 
     const scrollBottom = window.innerHeight + window.scrollY;
     const docHeight    = document.body.offsetHeight;
@@ -30467,7 +31078,11 @@ window.addEventListener("scroll", () => {
     const backBtn      = document.getElementById("comics-back-btn");
     const loadMoreBtn  = document.getElementById("comics-load-more-btn");
     const homeBtn      = document.getElementById("comics-home-btn");
+    const savedBtn     = document.getElementById("comics-saved-btn");
     const genresSelect = document.getElementById("comics-genres-dropdown");
+    const zoomInBtn    = document.getElementById("comics-zoom-in-btn");
+    const zoomOutBtn   = document.getElementById("comics-zoom-out-btn");
+    const fullscreenBtn = document.getElementById("comics-fullscreen-btn");
 
     // Populate genres dropdown
     if (genresSelect) {
@@ -30629,12 +31244,77 @@ window.addEventListener("scroll", () => {
             loadComicsAll(comicsCurrentPage);
         });
     }
+    
+    // Zoom controls
+    let comicsZoom = 1000;
+    const readerContainer = document.getElementById("comics-reader-container");
+    
+    if (zoomInBtn) {
+        zoomInBtn.addEventListener("click", () => {
+            comicsZoom += 200;
+            if (readerContainer) readerContainer.style.maxWidth = `${comicsZoom}px`;
+        });
+    }
+    if (zoomOutBtn) {
+        zoomOutBtn.addEventListener("click", () => {
+            if (comicsZoom > 400) comicsZoom -= 200;
+            if (readerContainer) readerContainer.style.maxWidth = `${comicsZoom}px`;
+        });
+    }
+
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener("click", () => {
+            toggleReaderFullscreen();
+        });
+    }
+
+    // Saved button
+    if (savedBtn) {
+        savedBtn.addEventListener("click", () => {
+            const container = document.getElementById("comics-container");
+            const loader    = document.getElementById("comics-loading");
+            
+            if (searchInput) searchInput.value = "";
+            if (genresSelect) genresSelect.value = "";
+            
+            comicsMode = "saved";
+            comicsIsSearchMode = false;
+            comicsHasMore = false;
+            
+            if (container) container.innerHTML = "";
+            if (loader) loader.style.display = "none";
+            
+            showComicsView("browse");
+            const saved = getSavedComics();
+            if (saved.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--gray); grid-column: 1 / -1; padding: 2rem;">No saved comics yet.</p>';
+            } else {
+                saved.forEach(addComicToGrid);
+            }
+        });
+    }
 })();
 
 
 
         // Initialize the app on DOMContentLoaded
         document.addEventListener('DOMContentLoaded', init);
+
+        // Listen for fullscreen change event to handle ESC key
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                document.body.classList.remove('reader-fullscreen-mode');
+                const comicsBtn = document.getElementById('comics-fullscreen-btn');
+                const mangaBtn = document.getElementById('mangaFullscreenBtn');
+                if (comicsBtn) comicsBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                if (mangaBtn) mangaBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            } else {
+                const comicsBtn = document.getElementById('comics-fullscreen-btn');
+                const mangaBtn = document.getElementById('mangaFullscreenBtn');
+                if (comicsBtn) comicsBtn.innerHTML = '<i class="fas fa-compress"></i>';
+                if (mangaBtn) mangaBtn.innerHTML = '<i class="fas fa-compress"></i>';
+            }
+        });
 
         // ---- Resume helpers ----
 
@@ -32113,7 +32793,7 @@ function playStreamInViewer(streamUrl) {
         ">&times;</button>
         <iframe src="${streamUrl}" style="
             width: 100%; height: 100%; border: none; flex-grow: 1;
-        " allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        " allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
     `;
     
     document.body.appendChild(viewer);
@@ -32402,6 +33082,92 @@ const liveTvPage = document.getElementById('livetv-page');
     if (liveTvPage.style.display !== 'none') {
         fetchMatches(currentSource);
     }
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Provider Switching Logic ---
+    const provider111477 = document.getElementById('provider111477');
+    const providerAcermovies = document.getElementById('providerAcermovies');
+    const content111477 = document.getElementById('111477-content');
+    const acermoviesContent = document.getElementById('acermovies-content');
+    const downloaderTypeToggle = document.querySelector('.downloader-search .downloader-type-toggle');
+    const downloaderQueryInput = document.getElementById('downloaderQuery');
+    const downloaderResults = document.getElementById('downloaderResults');
+    const downloaderEmpty = document.getElementById('downloaderEmpty');
+
+    function setActiveProvider(provider) {
+        provider111477.classList.remove('active');
+        providerAcermovies.classList.remove('active');
+        
+        if (provider === 'acermovies') {
+            providerAcermovies.classList.add('active');
+            if (downloaderTypeToggle) downloaderTypeToggle.style.display = 'none';
+            downloaderQueryInput.placeholder = 'Search acermovies...';
+        } else { // Default to 111477
+            provider111477.classList.add('active');
+            if (downloaderTypeToggle) downloaderTypeToggle.style.display = 'flex';
+            downloaderQueryInput.placeholder = 'Search movies or shows (e.g., Superman)';
+        }
+        // Clear results when switching providers
+        downloaderResults.innerHTML = '';
+        downloaderResults.classList.remove('single');
+        downloaderEmpty.style.display = 'none';
+    }
+
+    provider111477.addEventListener('click', () => setActiveProvider('111477'));
+    providerAcermovies.addEventListener('click', () => setActiveProvider('acermovies'));
+    setActiveProvider('111477'); // Set initial state
+
+
+    // --- Hijack original search function ---
+    const originalRunDownloaderSearch = window.runDownloaderSearch;
+    window.runDownloaderSearch = function(query) {
+
+        // If the original function is not on window, we might need to find it again.
+        // For now, assuming it's accessible or we can redefine the listener.
+        if (typeof originalRunDownloaderSearch === 'function') {
+             return originalRunDownloaderSearch.apply(this, arguments);
+        } else {
+            // Fallback: If we couldn't grab the original function, we need to manually trigger the old logic.
+            // This is complex, so let's try a simpler hijack: redefine the event listener.
+        }
+    }
+    
+    // A more robust way to hijack: replace the event listener.
+    const downloaderBtn = document.getElementById('downloaderSearchBtn');
+    if (downloaderBtn) {
+        // Clone and replace to remove old listeners
+        const newBtn = downloaderBtn.cloneNode(true);
+        downloaderBtn.parentNode.replaceChild(newBtn, downloaderBtn);
+
+        const newDownloaderQuery = document.getElementById('downloaderQuery');
+
+        function newSearchHandler() {
+             const acermoviesProviderActive = providerAcermovies?.classList.contains('active');
+             const query = newDownloaderQuery.value;
+             if (acermoviesProviderActive) {
+                searchAcerMovies(query);
+             } else {
+                // Because we replaced the button, the original 'runDownloaderSearch' listener is gone.
+                // We must call it explicitly. We assume it's globally available or we redefine it.
+                // Let's find the function in the existing script tags.
+                
+                // For now, let's just assume the original function is available on window for simplicity
+                if(typeof runDownloaderSearch === 'function') {
+                    runDownloaderSearch(query);
+                } else {
+                    console.error("Could not find original runDownloaderSearch function.");
+                }
+             }
+        }
+        
+        newBtn.addEventListener('click', newSearchHandler);
+        newDownloaderQuery.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') newSearchHandler();
+        });
+    }
+});
 </script>
 </body>
 <script>
