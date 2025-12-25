@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 
 const platform = process.argv[2]; // win, mac, linux
 if (!platform) {
-    console.error('Usage: node setup-ffmpeg.js <win|mac|linux>');
+    console.error('Usage: node setup-ffmpeg.cjs <win|mac|linux>');
     process.exit(1);
 }
 

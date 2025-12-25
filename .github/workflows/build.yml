@@ -48,7 +48,7 @@ jobs:
           }
 
       - name: Setup FFmpeg (Windows)
-        run: node build/setup-ffmpeg.js win
+        run: node build/setup-ffmpeg.cjs win
 
       - run: npm run build -- --win --publish always
         env:
@@ -94,7 +94,7 @@ jobs:
           fi
 
       - name: Setup FFmpeg (Linux)
-        run: node build/setup-ffmpeg.js linux
+        run: node build/setup-ffmpeg.cjs linux
 
       - run: npm run build -- --linux --publish always
         env:
@@ -138,7 +138,7 @@ jobs:
           fi
 
       - name: Setup FFmpeg (macOS)
-        run: node build/setup-ffmpeg.js mac
+        run: node build/setup-ffmpeg.cjs mac
 
       - run: npm run build -- --mac --x64 --publish always
         env:
@@ -182,7 +182,7 @@ jobs:
           fi
 
       - name: Setup FFmpeg (macOS)
-        run: node build/setup-ffmpeg.js mac
+        run: node build/setup-ffmpeg.cjs mac
 
       - run: npm run build -- --mac --arm64 --publish always
         env:
