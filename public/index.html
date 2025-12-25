@@ -2,12 +2,45 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
 <title>Ayman's PlayTorrio</title>
+<!-- Capacitor -->
+<script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
 <!-- Video.js CSS -->
 <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
 <style>
+        /* Android/Mobile specific styles */
+        @supports (padding: env(safe-area-inset-top)) {
+            body {
+                padding-top: env(safe-area-inset-top);
+                padding-bottom: env(safe-area-inset-bottom);
+                padding-left: env(safe-area-inset-left);
+                padding-right: env(safe-area-inset-right);
+            }
+        }
+        
+        /* Hide desktop-only elements on mobile */
+        body.platform-android .custom-title-bar { display: none !important; }
+        body.platform-android .title-bar-controls { display: none !important; }
+        
+        /* Mobile optimizations */
+        body.platform-android {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            user-select: none;
+        }
+        
+        body.platform-android .user-actions .btn {
+            padding: 0.5rem 0.8rem;
+            font-size: 0.85rem;
+        }
+        
+        body.platform-android header {
+            position: sticky;
+            top: 0;
+        }
+        
         /* Performance mode overrides: remove expensive visual effects when enabled */
         body.perf-mode * { backdrop-filter: none !important; }
         body.perf-mode .shadow-heavy { box-shadow: none !important; }
@@ -34359,6 +34392,185 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('[Addon] Error:', e);
             const tl = document.getElementById('torrentsList');
             if(tl) tl.innerHTML = `<div class="error-message">Addon Error: ${e.message}</div>`;
+        }
+    }
+})();
+</script>
+<!-- Android/Capacitor Bridge -->
+<script>
+(function() {
+    // Detect platform and add appropriate class
+    const isAndroid = /Android/i.test(navigator.userAgent) || 
+                     (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android');
+    const isCapacitor = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+    
+    if (isAndroid) {
+        document.body.classList.add('platform-android');
+        console.log('[PlayTorrio] Running on Android');
+    }
+    
+    if (isCapacitor) {
+        console.log('[PlayTorrio] Running in Capacitor native environment');
+        
+        // Initialize electronAPI compatibility layer if not already defined
+        if (!window.electronAPI) {
+            window.electronAPI = {
+                platform: 'android',
+                
+                // Stub implementations for basic compatibility
+                manifestWrite: async (url) => {
+                    localStorage.setItem('manifest_url', url);
+                    return { success: true };
+                },
+                manifestRead: async () => {
+                    const data = localStorage.getItem('manifest_url') || '';
+                    return { success: true, data };
+                },
+                addonInstall: async (url) => {
+                    try {
+                        const addons = JSON.parse(localStorage.getItem('installed_addons') || '[]');
+                        const response = await fetch(url);
+                        const manifest = await response.json();
+                        const existingIndex = addons.findIndex(a => a.manifest.id === manifest.id);
+                        if (existingIndex >= 0) {
+                            addons[existingIndex] = { url, manifest };
+                        } else {
+                            addons.push({ url, manifest });
+                        }
+                        localStorage.setItem('installed_addons', JSON.stringify(addons));
+                        return { success: true };
+                    } catch (error) {
+                        return { success: false, message: error.message };
+                    }
+                },
+                addonList: async () => {
+                    const addons = JSON.parse(localStorage.getItem('installed_addons') || '[]');
+                    return { success: true, addons };
+                },
+                addonRemove: async (id) => {
+                    const addons = JSON.parse(localStorage.getItem('installed_addons') || '[]');
+                    const filtered = addons.filter(a => a.manifest.id !== id);
+                    localStorage.setItem('installed_addons', JSON.stringify(filtered));
+                    return { success: true };
+                },
+                
+                // Window controls (no-op on mobile)
+                minimizeWindow: async () => {},
+                maximizeWindow: async () => {},
+                closeWindow: async () => {},
+                onMaximizeChanged: (cb) => {},
+                
+                // Player launchers
+                spawnMpvjsPlayer: async (payload) => ({ success: false, message: 'Use in-app player' }),
+                openInMPV: async (data) => {
+                    if (data && data.url) {
+                        window.open(data.url, '_system');
+                    }
+                    return { success: false };
+                },
+                openMPVDirect: async (url) => {
+                    window.open(url, '_system');
+                    return { success: false };
+                },
+                openMpvWithHeaders: async () => ({ success: false }),
+                openInVLC: async (data) => {
+                    if (data && data.url) {
+                        window.open('vlc://' + data.url, '_system');
+                    }
+                    return { success: false };
+                },
+                openVLCDirect: async (url) => {
+                    window.open('vlc://' + url, '_system');
+                    return { success: false };
+                },
+                openInIINA: async () => ({ success: false }),
+                playXDMovies: async () => ({ success: false }),
+                castToChromecast: async () => ({ success: false }),
+                discoverChromecastDevices: async () => [],
+                onStreamClosed: (cb) => {},
+                
+                // Cache management
+                clearWebtorrentTemp: async () => ({ success: true }),
+                clearCache: async () => {
+                    try { localStorage.clear(); } catch(e) {}
+                    return { success: true };
+                },
+                selectCacheFolder: async () => ({ success: false }),
+                restartApp: async () => { location.reload(); return { success: true }; },
+                openExternal: async (url) => {
+                    window.open(url, '_system');
+                    return { success: true };
+                },
+                copyToClipboard: async (text) => {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        return { success: true };
+                    } catch (e) {
+                        return { success: false };
+                    }
+                },
+                showFolderInExplorer: async () => ({ success: false }),
+                
+                // Books
+                booksGetUrl: async () => null,
+                onBooksUrl: (cb) => {},
+                
+                // Updates (handled by Play Store)
+                onUpdateChecking: (cb) => {},
+                onUpdateAvailable: (cb) => {},
+                onUpdateNotAvailable: (cb) => {},
+                onUpdateProgress: (cb) => {},
+                onUpdateDownloaded: (cb) => {},
+                installUpdateNow: async () => {},
+                
+                // My List
+                myListRead: async () => {
+                    const data = JSON.parse(localStorage.getItem('my_list') || '[]');
+                    return { success: true, data };
+                },
+                myListWrite: async (data) => {
+                    localStorage.setItem('my_list', JSON.stringify(data));
+                    return { success: true };
+                },
+                
+                // Done Watching
+                doneWatchingRead: async () => {
+                    const data = JSON.parse(localStorage.getItem('done_watching') || '[]');
+                    return { success: true, data };
+                },
+                doneWatchingWrite: async (data) => {
+                    localStorage.setItem('done_watching', JSON.stringify(data));
+                    return { success: true };
+                },
+                
+                // Fullscreen
+                setFullscreen: async (fs) => {
+                    try {
+                        if (fs) await document.documentElement.requestFullscreen();
+                        else if (document.fullscreenElement) await document.exitFullscreen();
+                    } catch(e) {}
+                    return { success: true };
+                },
+                getFullscreen: async () => !!document.fullscreenElement,
+                
+                // Discord (not available)
+                updateDiscordPresence: async () => {},
+                clearDiscordPresence: async () => {},
+                
+                // EPUB
+                getEpubFolder: async () => 'PlayTorrio/EPubs',
+                downloadEpub: async () => ({ success: false }),
+                getEpubLibrary: async () => ({ success: true, files: [] }),
+                readEpubFile: async () => ({ success: false }),
+                
+                // Music
+                musicDownloadTrack: async () => ({ success: false }),
+                musicGetOfflineLibrary: async () => ({ success: true, tracks: [] }),
+                musicDeleteOfflineTrack: async () => ({ success: false }),
+                
+                // WebChimera (not available)
+                wcjs: { available: false, init() { return null; } }
+            };
         }
     }
 })();

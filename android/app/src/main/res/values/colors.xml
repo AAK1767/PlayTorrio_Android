@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- PlayTorrio Color Palette -->
+    <color name="colorPrimary">#2a1847</color>
+    <color name="colorPrimaryDark">#120a1f</color>
+    <color name="colorAccent">#a855f7</color>
+    
+    <!-- Splash Screen -->
+    <color name="splash_background">#120a1f</color>
+    
+    <!-- Additional Theme Colors -->
+    <color name="secondary">#8b5cf6</color>
+    <color name="tertiary">#c084fc</color>
+    <color name="dark">#120a1f</color>
+    <color name="light">#f8f9fa</color>
+    <color name="gray">#6c757d</color>
+</resources>
