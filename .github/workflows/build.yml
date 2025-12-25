@@ -24,8 +24,6 @@ jobs:
 
       - name: Setup Windows Players
         run: |
-          if (Test-Path "mpv.rar") { 7z x mpv.rar -y }
-
           if (Test-Path "yt.zip") {
             7z x yt.zip -y
             Remove-Item yt.zip -Force
@@ -48,6 +46,9 @@ jobs:
             Write-Error "❌ yt-dlp not found"
             exit 1
           }
+
+      - name: Setup FFmpeg (Windows)
+        run: node build/setup-ffmpeg.js win
 
       - run: npm run build -- --win --publish always
         env:
@@ -92,6 +93,9 @@ jobs:
             echo "❌ yt-dlp not found" && exit 1
           fi
 
+      - name: Setup FFmpeg (Linux)
+        run: node build/setup-ffmpeg.js linux
+
       - run: npm run build -- --linux --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -133,6 +137,9 @@ jobs:
             echo "❌ yt-dlp not found" && exit 1
           fi
 
+      - name: Setup FFmpeg (macOS)
+        run: node build/setup-ffmpeg.js mac
+
       - run: npm run build -- --mac --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -173,6 +180,9 @@ jobs:
           else
             echo "❌ yt-dlp not found" && exit 1
           fi
+
+      - name: Setup FFmpeg (macOS)
+        run: node build/setup-ffmpeg.js mac
 
       - run: npm run build -- --mac --arm64 --publish always
         env:

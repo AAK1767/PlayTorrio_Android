@@ -13,7 +13,6 @@ import zlib from 'zlib';
 import crypto from 'crypto';
 import { createRequire } from 'module';
 import { spawn, execSync } from 'child_process';
-import ffmpegPath from 'ffmpeg-static';
 import parseTorrent from 'parse-torrent';
 
 
@@ -25,7 +24,7 @@ const { registerApiRoutes, registerMusicApi, initMusicDeps } = require('./api.cj
 
 
 // This function will be imported and called by main.js
-export function startServer(userDataPath, executablePath = null) {
+export function startServer(userDataPath, executablePath = null, ffmpegBin = null, ffprobeBin = null) {
     // Ensure userDataPath directory exists with proper permissions
     try {
         if (!fs.existsSync(userDataPath)) {
@@ -281,6 +280,167 @@ export function startServer(userDataPath, executablePath = null) {
     });
 
     // ============================================================================
+    // TRANSCODER INTEGRATION
+    // ============================================================================
+    
+    // Use passed-in binaries
+    let resolvedFfmpegPath = ffmpegBin; 
+    let resolvedFfprobePath = ffprobeBin;
+
+    if (!resolvedFfmpegPath) {
+        console.error('[Transcoder] CRITICAL: No FFmpeg binary provided to startServer!');
+    }
+
+    console.log(`[Transcoder] Active FFmpeg: ${resolvedFfmpegPath}`);
+    console.log(`[Transcoder] Active FFprobe: ${resolvedFfprobePath}`);
+
+    const metadataCache = new Map();
+
+    async function getVideoMetadata(videoUrl) {
+        if (metadataCache.has(videoUrl)) return metadataCache.get(videoUrl);
+        
+        // Use 127.0.0.1 instead of localhost for internal requests to avoid DNS/IPv6 issues
+        const targetUrl = videoUrl.replace('localhost', '127.0.0.1');
+        
+        return new Promise((resolve, reject) => {
+            // Added reconnection flags and reduced analysis duration for stability
+            const args = [
+                '-hide_banner',
+                '-loglevel', 'error',
+                '-print_format', 'json',
+                '-show_format',
+                '-show_streams',
+                '-reconnect', '1',
+                '-reconnect_streamed', '1',
+                '-reconnect_delay_max', '5',
+                '-analyzeduration', '5000000', 
+                '-probesize', '5000000',
+                targetUrl
+            ];
+            
+            console.log(`[FFprobe] Spawning: ${resolvedFfprobePath} ${args.join(' ')}`);
+            
+            const ffprobe = spawn(resolvedFfprobePath, args);
+            let stdout = '', stderr = '';
+            ffprobe.stdout.on('data', (d) => stdout += d.toString());
+            ffprobe.stderr.on('data', (d) => stderr += d.toString());
+            
+            ffprobe.on('error', (err) => {
+                console.error(`[FFprobe] Failed to spawn process:`, err.message);
+                reject(err);
+            });
+
+            ffprobe.on('close', (code, signal) => {
+                if (code !== 0) {
+                    console.error(`[FFprobe] Process failed for ${targetUrl}`);
+                    console.error(`[FFprobe] Exit Code: ${code}, Signal: ${signal}`);
+                    console.error(`[FFprobe] Stderr: ${stderr}`);
+                    return reject(new Error(`ffprobe failed: ${stderr || 'Unknown error'}`));
+                }
+                try {
+                    const data = JSON.parse(stdout);
+                    const videoStream = data.streams?.find(s => s.codec_type === 'video');
+                    const audioStreams = data.streams?.filter(s => s.codec_type === 'audio') || [];
+                    
+                    const meta = {
+                        duration: parseFloat(data.format?.duration) || 0,
+                        videoCodec: videoStream?.codec_name || 'unknown',
+                        width: videoStream?.width || 0,
+                        height: videoStream?.height || 0,
+                        audioTracks: audioStreams.map((s, index) => ({
+                            index: s.index,
+                            id: index, // Relative audio index for mapping
+                            codec: s.codec_name,
+                            language: s.tags?.language || 'und',
+                            title: s.tags?.title || `Track ${index + 1}`
+                        }))
+                    };
+                    metadataCache.set(videoUrl, meta);
+                    resolve(meta);
+                } catch (e) { 
+                    console.error('[FFprobe] Parse Error:', e.message, 'Stdout:', stdout);
+                    reject(e); 
+                }
+            });
+
+            const timeout = setTimeout(() => { 
+                console.warn('[FFprobe] Operation timed out, killing process');
+                ffprobe.kill('SIGKILL'); 
+                reject(new Error('ffprobe timeout')); 
+            }, 30000); 
+
+            ffprobe.on('close', () => clearTimeout(timeout));
+        });
+    }
+
+    app.get('/api/transcode/metadata', async (req, res) => {
+        const { url: videoUrl } = req.query;
+        if (!videoUrl) return res.status(400).json({ error: 'Missing url' });
+        try {
+            const meta = await getVideoMetadata(videoUrl);
+            res.json(meta);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.get('/api/transcode/stream', async (req, res) => {
+        const { url: videoUrl, start = 0, audioTrack = 0 } = req.query;
+        if (!videoUrl) return res.status(400).send('Missing url');
+
+        // Use 127.0.0.1 for internal requests
+        const targetUrl = videoUrl.replace('localhost', '127.0.0.1');
+
+        console.log(`[Transcoder] Request: ${targetUrl} from ${start}s`);
+        console.log(`[Transcoder] Using binary: ${resolvedFfmpegPath}`);
+
+        // Fetch metadata to get duration if not cached
+        let duration = 0;
+        try {
+            const meta = await getVideoMetadata(videoUrl);
+            duration = meta.duration;
+        } catch (e) {
+            console.warn('[Transcoder] Could not fetch duration for stream headers');
+        }
+
+        res.writeHead(200, {
+            'Content-Type': 'video/mp4',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Accept-Ranges': 'bytes',
+            'Transfer-Encoding': 'chunked'
+        });
+
+        const args = [
+            '-ss', start.toString(),
+            '-i', targetUrl,
+            '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+            '-map', '0:v:0',
+            '-map', `0:a:${audioTrack}`,
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency',
+            '-pix_fmt', 'yuv420p', '-vf', 'scale=-2:720,fps=30',
+            '-b:v', '2500k', '-maxrate', '3000k', '-bufsize', '6000k',
+            '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-ar', '44100',
+            '-movflags', 'frag_keyframe+empty_moov+default_base_moof+faststart',
+            '-f', 'mp4', '-'
+        ];
+
+        const ffmpeg = spawn(resolvedFfmpegPath, args);
+        ffmpeg.stdout.pipe(res);
+        
+        // Log errors from ffmpeg
+        ffmpeg.stderr.on('data', (data) => {
+            const msg = data.toString();
+            if (msg.toLowerCase().includes('error')) console.error('[FFmpeg]', msg.trim());
+        });
+
+        res.on('close', () => {
+            console.log('[Transcoder] Client disconnected, killing ffmpeg');
+            ffmpeg.kill('SIGKILL');
+        });
+    });
+
+    // ============================================================================
     // NUVIO PROXY - Cache Nuvio streaming API requests
     // ============================================================================
     app.get('/api/nuvio/stream/:type/:id', cacheMiddleware, async (req, res) => {
@@ -346,7 +506,11 @@ export function startServer(userDataPath, executablePath = null) {
     console.log('📦 Registering API routes from api.js...');
     registerApiRoutes(app);
     console.log('✅ API routes registered successfully');
-    initMusicDeps();
+    try {
+        initMusicDeps();
+    } catch (e) {
+        console.error('[Music] Failed to initialize dependencies:', e.message);
+    }
     registerMusicApi(app);
     // Simple playback resume storage in userData
     const RESUME_PATH = path.join(userDataPath, 'playback_positions.json');

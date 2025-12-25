@@ -933,33 +933,43 @@ async function torrentless_searchTorrentDownload(query) {
 async function torrentless_fetchWithRetries(urlStr) {
     const attempts = [];
 
-    attempts.push(torrentless_buildRequest(urlStr, {
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-    }));
+    try {
+        attempts.push(torrentless_buildRequest(urlStr, {
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+        }));
 
-    attempts.push(torrentless_buildRequest(urlStr, {
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:118.0) Gecko/20100101 Firefox/118.0',
-    }));
+        attempts.push(torrentless_buildRequest(urlStr, {
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:118.0) Gecko/20100101 Firefox/118.0',
+        }));
 
-    const u = new URL(urlStr);
-    u.protocol = u.protocol === 'https:' ? 'http:' : 'https:';
-    attempts.push(torrentless_buildRequest(u.toString(), {
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-    }));
+        try {
+            const u = new URL(urlStr);
+            u.protocol = u.protocol === 'https:' ? 'http:' : 'https:';
+            attempts.push(torrentless_buildRequest(u.toString(), {
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+            }));
+        } catch (_) {
+            // URL switch failed, skip this attempt
+        }
+    } catch (e) {
+        console.error('[TORRENTLESS] Setup request error:', e.message);
+    }
 
     let lastErr;
     for (const req of attempts) {
         try {
-            const { data } = await req;
+            const response = await req;
+            const data = response?.data;
             if (typeof data === 'string' && data.includes('<html')) {
                 return data;
             }
-            lastErr = new Error('Unexpected response payload');
+            lastErr = new Error(`Invalid response content type: ${typeof data}`);
         } catch (e) {
             lastErr = e;
+            console.warn('[TORRENTLESS] Attempt failed:', e.message);
         }
     }
-    throw lastErr || new Error('Failed to fetch page');
+    throw lastErr || new Error('All attempts failed to fetch the page');
 }
 
 function torrentless_buildRequest(urlStr, { userAgent }) {
@@ -6103,7 +6113,7 @@ function initMusicDeps() {
       return;
     }
   }
-  throw new Error('yt-dlp binary not found in expected locations');
+  console.error('[Music] ERROR: yt-dlp binary not found in expected locations. Music features may not work.');
 }
 
 // ---- ROUTES ----

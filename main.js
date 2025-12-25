@@ -670,6 +670,60 @@ async function clearPlaytorrioSubtitlesTemp() {
 
 // resolveMpvExe removed
 
+function resolveSystemMpv() {
+    try {
+        // Try 'mpv' in system PATH
+        const checkCmd = process.platform === 'win32' ? 'where' : 'which';
+        const result = spawnSync(checkCmd, ['mpv'], { encoding: 'utf8' });
+        if (result.status === 0 && result.stdout.trim()) {
+            return result.stdout.split('\r\n')[0].split('\n')[0].trim();
+        }
+        
+        // Check common installation paths
+        const candidates = [];
+        if (process.platform === 'darwin') {
+            candidates.push('/usr/local/bin/mpv', '/opt/homebrew/bin/mpv', '/Applications/mpv.app/Contents/MacOS/mpv');
+        } else if (process.platform === 'win32') {
+            candidates.push('C:\\Program Files\\mpv\\mpv.exe', 'C:\\Program Files (x86)\\mpv\\mpv.exe');
+        } else {
+            candidates.push('/usr/bin/mpv', '/usr/local/bin/mpv', '/snap/bin/mpv');
+        }
+        
+        for (const p of candidates) {
+            if (fs.existsSync(p)) return p;
+        }
+    } catch (e) {
+        console.error('[MPV] Resolution error:', e.message);
+    }
+    return null;
+}
+
+async function openInStandaloneMPV(url, startSeconds = null) {
+    const mpvPath = resolveSystemMpv();
+    if (!mpvPath) {
+        console.warn('[MPV] System MPV not found');
+        return { 
+            success: false, 
+            message: 'MPV player not found. Please install it globally (https://mpv.io) to use this feature.' 
+        };
+    }
+    
+    const args = [];
+    if (startSeconds && !isNaN(startSeconds) && startSeconds > 0) {
+        args.push(`--start=${Math.floor(startSeconds)}`);
+    }
+    args.push(url);
+    
+    console.log('[MPV] Spawning standalone:', mpvPath, args);
+    try {
+        const mpvProcess = spawn(mpvPath, args, { stdio: 'ignore', detached: true });
+        mpvProcess.unref();
+        return { success: true };
+    } catch (e) {
+        return { success: false, message: 'Failed to launch MPV: ' + e.message };
+    }
+}
+
 
 // Resolve VLC executable path (system-wide only)
 function resolveVlcExe() {
@@ -787,6 +841,7 @@ function resolveYtdlpExe() {
                 }
             } catch {}
         }
+        console.warn('[YTDLP] yt-dlp executable not found in any of the candidates.');
     } catch (err) {
         console.error('[YTDLP] Resolver error:', err);
     }
@@ -820,18 +875,23 @@ async function refreshSpotifyToken() {
     console.log('[Spotify] Token refreshed');
   } catch (error) {
     console.error('[Spotify] Token refresh failed:', error.message);
-    throw new Error('Could not refresh token');
+    // Don't throw, just log
   }
 }
 
 async function callSpotifyApi(url) {
-  await refreshSpotifyToken();
-  const response = await got(url, {
-    headers: { Authorization: `Bearer ${spotifyToken}` },
-    timeout: { request: 10000 },
-    responseType: 'json'
-  });
-  return response.body;
+  try {
+    await refreshSpotifyToken();
+    const response = await got(url, {
+        headers: { Authorization: `Bearer ${spotifyToken}` },
+        timeout: { request: 10000 },
+        responseType: 'json'
+    });
+    return response.body;
+  } catch (e) {
+    console.error('[Spotify] API call failed:', e.message);
+    return {};
+  }
 }
 
 function formatTrack(track) {
@@ -871,7 +931,8 @@ async function getYouTubeAudioUrl(searchQuery, trackId) {
 
     const ytdlpPath = resolveYtdlpExe();
     if (!ytdlpPath) {
-        throw new Error('yt-dlp executable not found.');
+        console.error('[YTMusic] yt-dlp executable not found. Cannot search or stream.');
+        return Promise.reject(new Error('yt-dlp executable not found.'));
     }
 
     console.log('[YTMusic] Searching:', searchQuery);
@@ -940,40 +1001,137 @@ async function getYouTubeAudioUrl(searchQuery, trackId) {
 }
 
 
-// Launch HTML5 Player
-function openInHtml5Player(win, streamUrl, startSeconds) {
-    try {
-        console.log('[HTML5] Launching HTML5 player window...');
-        console.log('[HTML5] Stream URL:', streamUrl);
+let playerWindow = null;
 
-        const playerWin = new BrowserWindow({
-            width: 1280,
-            height: 720,
-            title: 'Player',
+function stopPlayback() {
+    console.log('[Playback] Stopping playback and cleaning up...');
+    
+    // Reset Discord RPC
+    try {
+        if (discordRpc && discordRpcReady) {
+            discordRpc.setActivity({
+                details: 'Browsing PlayTorrio',
+                startTimestamp: new Date(),
+                largeImageKey: 'icon',
+                largeImageText: 'PlayTorrio App',
+                buttons: [
+                    { label: 'Download App', url: 'https://github.com/ayman708-UX/PlayTorrio' }
+                ]
+            });
+        }
+    } catch(e) {}
+
+    // Destroy WebTorrent streams
+    if (webtorrentClient) {
+        try {
+            const torrents = webtorrentClient.torrents;
+            if (torrents.length > 0) {
+                console.log(`[Playback] Destroying ${torrents.length} active torrents...`);
+                // Clone array because destroying modifies it
+                [...torrents].forEach(t => {
+                    t.destroy({ destroyStore: true }, (err) => {
+                         if(err) console.error('[Playback] Error destroying torrent:', err);
+                    });
+                });
+            }
+        } catch(e) {
+            console.error('[Playback] Error clearing torrents:', e);
+        }
+    }
+}
+
+// Launch HTML5 Player (Overlay Window)
+function openInHtml5Player(win, streamUrl, startSeconds, metadata = {}) {
+    try {
+        console.log('[HTML5] Opening player overlay...');
+        
+        if (!mainWindow || mainWindow.isDestroyed()) {
+             return { success: false, message: 'Main window not available' };
+        }
+        
+        if (playerWindow && !playerWindow.isDestroyed()) {
+            playerWindow.show();
+            playerWindow.focus();
+            return { success: true };
+        }
+
+        const bounds = mainWindow.getBounds();
+
+        playerWindow = new BrowserWindow({
+            parent: mainWindow,
+            modal: false,
+            show: false,
+            frame: false, // Frameless
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
             backgroundColor: '#000000',
             webPreferences: {
                 nodeIntegration: true,
-                contextIsolation: false
-            },
-            autoHideMenuBar: true
+                contextIsolation: false,
+                webSecurity: false
+            }
         });
 
-        // Load the local HTML file with query params
+        // Sync movement/resize
+        let isSyncing = false;
+        const syncToPlayer = () => {
+            if (isSyncing) return;
+            if (playerWindow && !playerWindow.isDestroyed() && !playerWindow.isFullScreen()) {
+                isSyncing = true;
+                playerWindow.setBounds(mainWindow.getBounds());
+                isSyncing = false;
+            }
+        };
+        const syncToMain = () => {
+            if (isSyncing) return;
+            if (mainWindow && !mainWindow.isDestroyed() && !playerWindow.isFullScreen()) {
+                isSyncing = true;
+                mainWindow.setBounds(playerWindow.getBounds());
+                isSyncing = false;
+            }
+        };
+
+        mainWindow.on('move', syncToPlayer);
+        mainWindow.on('resize', syncToPlayer);
+        
+        playerWindow.on('move', syncToMain);
+        playerWindow.on('resize', syncToMain);
+
+        playerWindow.on('closed', () => {
+            mainWindow.removeListener('move', syncToPlayer);
+            mainWindow.removeListener('resize', syncToPlayer);
+            playerWindow = null;
+        });
+
         const params = new URLSearchParams();
         if (streamUrl) params.append('url', streamUrl);
         if (startSeconds) params.append('t', startSeconds);
+        if (metadata.tmdbId) params.append('tmdbId', metadata.tmdbId);
+        if (metadata.seasonNum) params.append('season', metadata.seasonNum);
+        if (metadata.episodeNum) params.append('episode', metadata.episodeNum);
+        if (metadata.type) params.append('type', metadata.type);
 
-        const playerUrl = `file://${path.join(__dirname, 'public', 'player.html')}?${params.toString()}`;
+        const playerUrl = `http://localhost:6987/player.html?${params.toString()}`;
         console.log('[HTML5] Loading:', playerUrl);
         
-        playerWin.loadURL(playerUrl);
+        playerWindow.loadURL(playerUrl);
+        
+        playerWindow.once('ready-to-show', () => {
+            playerWindow.show();
+            playerWindow.focus();
+        });
+
+        // Handle Escape to exit fullscreen/close via IPC from renderer
+        // (Handled in player.html script)
 
         // Update Discord RPC
         try {
             if (discordRpc && discordRpcReady) {
                 discordRpc.setActivity({
-                    details: 'Watching Video',
-                    state: 'Playing',
+                    details: metadata.title || 'Watching Video',
+                    state: (metadata.seasonNum && metadata.episodeNum) ? `S${metadata.seasonNum}:E${metadata.episodeNum}` : 'Playing',
                     startTimestamp: new Date(),
                     largeImageKey: 'icon',
                     largeImageText: 'PlayTorrio Player',
@@ -1877,6 +2035,7 @@ function startRandomBook() {
     }
 }
 
+// resolveMpvExe removed
 // Start Anime (Nyaa) server
 function startAnime() {
     if (animeProc) {
@@ -2156,7 +2315,50 @@ if (!gotLock) {
     } catch(_) {}
     // Start the unified server (port 6987) - handles all API routes including anime, books, torrents, etc.
     try {
-        const { server, client, clearCache } = startServer(app.getPath('userData'), app.getPath('exe'));
+        // Resolve bundled ffmpeg/ffprobe
+        const isWin = process.platform === 'win32';
+        const isMac = process.platform === 'darwin';
+        const ffmpegFolder = isWin ? 'ffmpegwin' : (isMac ? 'ffmpegmac' : 'ffmpeglinux');
+        const exeExt = isWin ? '.exe' : '';
+        
+        let ffmpegBin = null;
+        let ffprobeBin = null;
+
+        const ffmpegCandidates = [];
+        if (app.isPackaged && process.resourcesPath) {
+            // Production path: resources/ffmpeg/ffmpeg{platform}
+            ffmpegCandidates.push(path.join(process.resourcesPath, 'ffmpeg', ffmpegFolder));
+            ffmpegCandidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'ffmpeg', ffmpegFolder));
+        }
+        // Development path: root/ffmpeg/ffmpeg{platform}
+        ffmpegCandidates.push(path.join(__dirname, 'ffmpeg', ffmpegFolder));
+
+        for (const p of ffmpegCandidates) {
+            const f = path.join(p, `ffmpeg${exeExt}`);
+            const pr = path.join(p, `ffprobe${exeExt}`);
+            if (fs.existsSync(f)) {
+                ffmpegBin = f;
+                ffprobeBin = pr;
+                console.log(`[FFmpeg] Found binaries in: ${p}`);
+                // Ensure executable on Unix
+                if (!isWin) {
+                    try { 
+                        if (fs.existsSync(f)) fs.chmodSync(f, 0o755); 
+                        if (fs.existsSync(pr)) fs.chmodSync(pr, 0o755);
+                        console.log(`[FFmpeg] Set +x permissions for Linux/Mac`);
+                    } catch(e) {
+                        console.error(`[FFmpeg] Failed to set permissions: ${e.message}`);
+                    }
+                }
+                break;
+            }
+        }
+
+        if (!ffmpegBin) {
+            console.warn(`[FFmpeg] Bundled binaries NOT found for ${process.platform}. Looked in: ${ffmpegCandidates.join(', ')}`);
+        }
+
+        const { server, client, clearCache } = startServer(app.getPath('userData'), app.getPath('exe'), ffmpegBin, ffprobeBin);
         httpServer = server;
         webtorrentClient = client;
         // Store clearCache function globally for cleanup on exit
@@ -2208,12 +2410,12 @@ global.manifestWrite = (data) => ipcMain.invoke("manifestWrite", data);
     // Register embedded player IPC handlers - Removed
     // registerIPC();
 
-    // IPC handler to open Player from renderer (formerly MPV)
+    // IPC handler to open System MPV (Standalone)
     ipcMain.handle('open-in-mpv', (event, data) => {
-        const { streamUrl, url, infoHash, startSeconds } = data || {};
+        const { streamUrl, url, startSeconds } = data || {};
         const finalUrl = streamUrl || url;
-        console.log(`Received Player open request for hash: ${infoHash}`);
-        return openInHtml5Player(mainWindow, finalUrl, startSeconds);
+        console.log(`[MPV] Standalone request: ${finalUrl}`);
+        return openInStandaloneMPV(finalUrl, startSeconds);
     });
 ipcMain.handle("manifestWrite", async (event, manifestUrl) => {
     try {
@@ -2327,24 +2529,19 @@ ipcMain.handle("addonRemove", async (event, addonId) => {
 
     // IPC handler to spawn player (formerly mpv.js, now HTML5)
     ipcMain.handle('spawn-mpvjs-player', async (event, { url, tmdbId, seasonNum, episodeNum, subtitles }) => {
-        console.log('[Player] Spawn request (HTML5):', { url });
+        console.log('[Player] Spawn request (HTML5):', { url, tmdbId });
         try {
-             return openInHtml5Player(mainWindow, url, null);
+             return openInHtml5Player(mainWindow, url, null, { tmdbId, seasonNum, episodeNum, type: (seasonNum ? 'tv' : 'movie') });
         } catch(e) {
              console.error('Error spawning HTML5 player:', e);
              return { success: false, message: e.message };
         }
     });
 
-    // Direct Player launch for external URLs
+    // Direct MPV launch for external URLs (111477, etc.)
     ipcMain.handle('open-mpv-direct', async (event, url) => {
-        try {
-            console.log('Opening URL in HTML5 Player:', url);
-            return openInHtml5Player(mainWindow, url, null);
-        } catch (error) {
-            console.error('Error opening player:', error);
-            return { success: false, error: error.message };
-        }
+        console.log(`[MPV] Direct standalone request: ${url}`);
+        return openInStandaloneMPV(url);
     });
 
     // IPC handler to open IINA from renderer (macOS only)

@@ -14862,7 +14862,10 @@ Your browser does not support the video tag.
 
             // Toggle buttons per platform
             const platform = window.electronAPI?.platform;
-            if (openMpvBtn) openMpvBtn.style.display = (platform === 'win32') ? 'inline-flex' : 'none';
+            if (openMpvBtn) {
+                openMpvBtn.style.display = 'inline-flex'; // Show on all platforms
+                openMpvBtn.innerHTML = '<i class="fas fa-play"></i> Play Now';
+            }
             if (openIinaBtn) openIinaBtn.style.display = (platform === 'darwin') ? 'inline-flex' : 'none';
 
             // External open buttons
@@ -14875,16 +14878,16 @@ Your browser does not support the video tag.
             if (openMpvBtn) {
                 openMpvBtn.onclick = async () => {
                     try {
-                        // Windows: use native mpv.js player
-                        if (window.electronAPI && window.electronAPI.platform === 'win32' && window.electronAPI.spawnMpvjsPlayer) {
+                        // Integrated HTML5 player (replaces mpv.js)
+                        if (window.electronAPI && window.electronAPI.spawnMpvjsPlayer) {
                             const payload = { url };
                             const result = await window.electronAPI.spawnMpvjsPlayer(payload);
                             if (!result || !result.success) {
-                                showNotification(result?.message || 'Failed to launch mpv.js player');
+                                showNotification(result?.message || 'Failed to launch player');
                             }
                             return;
                         }
-                        showNotification('mpv.js player only available on Windows');
+                        showNotification('Integrated player not available');
                     } catch (e) {
                         showNotification('Failed to launch player: ' + (e?.message || e));
                     }
@@ -25570,7 +25573,7 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
                             if (result && result.success) {
                                 showNotification('Opening stream in MPV... Please Wait', 'success', 5000);
                             } else {
-                                showNotification('Failed to open in MPV: ' + (result?.error || 'Unknown error'));
+                                showNotification(result?.message || 'Failed to open in MPV', 'error', 7000);
                             }
                         } catch (error) {
                             console.error('[111477] MPV error:', error);
@@ -27445,11 +27448,11 @@ async function fetchMovieBoxStreams(season = null, episode = null) {
             if (result.success) {
                 showNotification(`${playerName} launched - Please Wait! Watch out for a new window`, 'success', 5000);
             } else {
-                // Special handling for IINA not installed
-                if (isMac && result.message && result.message.includes('not installed')) {
-                    showNotification('IINA not installed. Please download it from https://iina.io', 'error', 7000);
+                // Special handling for IINA/MPV not installed
+                if (result.message && (result.message.includes('not installed') || result.message.includes('not found'))) {
+                    showNotification(result.message, 'error', 10000);
                 } else {
-                    showNotification(`Error: ${result.message}`);
+                    showNotification(`Error: ${result.message}`, 'error', 7000);
                 }
             }
         }
